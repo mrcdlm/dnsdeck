@@ -31,6 +31,7 @@ export const recordStatus: Record<RecordStatus, { label: string; variant: BadgeV
 
 export const updateResult: Record<UpdateResult, { label: string; variant: BadgeVariant }> = {
   created: { label: 'Angelegt', variant: 'success' },
+  adopted: { label: 'Übernommen', variant: 'secondary' },
   updated: { label: 'Aktualisiert', variant: 'success' },
   error: { label: 'Fehler', variant: 'destructive' },
 }

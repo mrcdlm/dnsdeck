@@ -57,6 +57,15 @@ func (f *Fake) AddRecord(r Record) string {
 	return r.ID
 }
 
+// Patch ändert einen Eintrag direkt (simuliert Änderungen im Cloudflare-Dashboard).
+func (f *Fake) Patch(id string, fn func(*Record)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r, ok := f.records[id]; ok {
+		fn(r)
+	}
+}
+
 // Records liefert eine Kopie aller Einträge, sortiert nach Name/Typ.
 func (f *Fake) Records() []Record {
 	f.mu.Lock()

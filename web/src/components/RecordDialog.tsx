@@ -83,8 +83,8 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
         <DialogTitle>{editing ? 'Record bearbeiten' : 'Record hinzufügen'}</DialogTitle>
         <DialogDescription>
           {editing
-            ? 'Änderungen werden sofort mit Cloudflare abgeglichen.'
-            : 'Existiert der Eintrag bei Cloudflare noch nicht, legt dnsdeck ihn an.'}
+            ? 'Geänderte Proxy-/TTL-Werte werden sofort zu Cloudflare übertragen.'
+            : 'Fehlt der Eintrag bei Cloudflare, wird er mit diesen Werten angelegt. Existiert er bereits, übernimmt dnsdeck Proxy und TTL von Cloudflare und ändert nur die IP.'}
         </DialogDescription>
       </DialogHeader>
 

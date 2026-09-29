@@ -98,8 +98,10 @@ func TestNoUpdateWhenUnchanged(t *testing.T) {
 	if got := e.get(t, r.ID); got.Status != store.RecordOK || got.LastChangedAt != nil {
 		t.Fatalf("Record: %+v", got)
 	}
-	if l := e.logs(t); len(l) != 0 {
-		t.Fatalf("Log sollte leer sein: %+v", l)
+	// genau ein Eintrag: die Übernahme beim ersten Abgleich
+	if l := e.logs(t); len(l) != 1 || l[0].Result != store.ResultAdopted ||
+		l[0].Message != "bestehenden Eintrag übernommen (Proxy aus, TTL Auto)" {
+		t.Fatalf("Log: %+v", l)
 	}
 }
 
@@ -118,22 +120,76 @@ func TestUpdatesOnIPChange(t *testing.T) {
 	}
 }
 
-func TestUpdatesSettings(t *testing.T) {
+// Bestehender Eintrag: Proxy/TTL kommen von Cloudflare, nicht aus dem
+// (voreingestellten) Dialog; geändert wird nur die IP.
+func TestAdoptKeepsCloudflareSettings(t *testing.T) {
 	e, ctx := setup(t), context.Background()
-	e.fake.AddRecord(cftest.Record{ZoneID: "z1", Name: "home.example.com", Type: "A", Content: "203.0.113.1", TTL: 1})
-	e.add(t, "home.example.com", "A", 1, true) // proxied gewünscht
+	e.fake.AddRecord(cftest.Record{ZoneID: "z1", Name: "immich.example.com", Type: "A", Content: "1.2.3.4", TTL: 1, Proxied: true})
+	r := e.add(t, "immich.example.com", "A", 1, false) // Dialog-Voreinstellung: Proxy aus
 
-	e.u.SyncAll(ctx, ips1, store.TriggerScheduled)
-	if recs := e.fake.Records(); !recs[0].Proxied {
-		t.Fatalf("Proxy nicht gesetzt: %+v", recs)
+	e.u.SyncAll(ctx, ips1, store.TriggerRecordSaved)
+	cf := e.fake.Records()[0]
+	if !cf.Proxied || cf.Content != "203.0.113.1" {
+		t.Fatalf("Proxy darf nicht abgeschaltet werden: %+v", cf)
 	}
-	if l := e.logs(t); len(l) != 1 || l[0].Message != "Proxy/TTL angepasst" {
+	if got := e.get(t, r.ID); !got.Proxied || got.SettingsPending {
+		t.Fatalf("dnsdeck muss Proxy übernehmen: %+v", got)
+	}
+	l := e.logs(t)
+	if len(l) != 1 || l[0].Result != store.ResultUpdated || l[0].OldIP != "1.2.3.4" ||
+		l[0].Message != "bestehenden Eintrag übernommen" {
 		t.Fatalf("Log: %+v", l)
 	}
-	// proxied → TTL von Cloudflare erzwungen, kein erneutes Update
+}
+
+func TestSettingsChangedInDnsdeckArePushed(t *testing.T) {
+	e, ctx := setup(t), context.Background()
+	e.fake.AddRecord(cftest.Record{ZoneID: "z1", Name: "home.example.com", Type: "A", Content: "203.0.113.1", TTL: 1})
+	r := e.add(t, "home.example.com", "A", 1, false)
+	e.u.SyncAll(ctx, ips1, store.TriggerScheduled)
+
+	r = e.get(t, r.ID)
+	r.TTL = 300
+	e.st.UpdateRecordSettings(ctx, r)
+	e.u.SyncRecord(ctx, r.ID, ips1, store.TriggerRecordSaved)
+
+	if cf := e.fake.Records()[0]; cf.TTL != 300 {
+		t.Fatalf("TTL nicht übertragen: %+v", cf)
+	}
+	if got := e.get(t, r.ID); got.SettingsPending {
+		t.Fatal("pending nach Übertragung")
+	}
+	l := e.logs(t)
+	if l[0].Result != store.ResultUpdated || l[0].Message != "TTL: Auto → 5 min" {
+		t.Fatalf("Log: %+v", l[0])
+	}
+	// weitere Läufe: nichts mehr zu tun
 	e.u.SyncAll(ctx, ips1, store.TriggerScheduled)
 	if e.fake.Patches.Load() != 1 {
 		t.Fatalf("patches = %d", e.fake.Patches.Load())
+	}
+}
+
+func TestSettingsChangedAtCloudflareAreAdopted(t *testing.T) {
+	e, ctx := setup(t), context.Background()
+	id := e.fake.AddRecord(cftest.Record{ZoneID: "z1", Name: "home.example.com", Type: "A", Content: "203.0.113.1", TTL: 1})
+	r := e.add(t, "home.example.com", "A", 1, false)
+	e.u.SyncAll(ctx, ips1, store.TriggerScheduled)
+
+	// Im Cloudflare-Dashboard: Proxy an und zugleich falsche IP
+	e.fake.Patch(id, func(c *cftest.Record) { c.Proxied, c.Content = true, "1.2.3.4" })
+	e.u.SyncAll(ctx, ips1, store.TriggerManual)
+
+	cf := e.fake.Records()[0]
+	if !cf.Proxied || cf.Content != "203.0.113.1" {
+		t.Fatalf("Proxy muss bleiben, IP korrigiert werden: %+v", cf)
+	}
+	if got := e.get(t, r.ID); !got.Proxied {
+		t.Fatalf("dnsdeck muss Proxy übernehmen: %+v", got)
+	}
+	l := e.logs(t)
+	if l[0].OldIP != "1.2.3.4" || l[0].NewIP != "203.0.113.1" || l[0].Message != "" {
+		t.Fatalf("Log: %+v", l[0])
 	}
 }
 

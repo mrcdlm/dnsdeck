@@ -9,6 +9,7 @@ import (
 // Ergebnisse im Update-Log.
 const (
 	ResultCreated = "created"
+	ResultAdopted = "adopted" // bestehenden Eintrag unverändert übernommen
 	ResultUpdated = "updated"
 	ResultError   = "error"
 )
