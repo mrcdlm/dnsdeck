@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
+	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -21,23 +22,43 @@ type dataStore interface {
 	sessionStore
 	Ping(ctx context.Context) error
 	ListIPChanges(ctx context.Context, limit int) ([]store.IPChange, error)
+	recordStore
 }
 
 type ipTracker interface {
 	State() ipdetect.State
-	Check(ctx context.Context) (ipdetect.State, error)
+}
+
+// ddnsService führt IP-Prüfung und DNS-Abgleich aus.
+type ddnsService interface {
+	RunCycle(ctx context.Context, trigger string) (ipdetect.State, error)
+	SyncRecord(ctx context.Context, id int64, trigger string) (store.Record, error)
+}
+
+// Deps sind die Abhängigkeiten des HTTP-Servers.
+type Deps struct {
+	Store   dataStore
+	Tracker ipTracker
+	DDNS    ddnsService
+	Zones   providers.ZoneLister // nil = Cloudflare nicht konfiguriert
+	Auth    *Auth
+	Log     *slog.Logger
+	Static  fs.FS
 }
 
 type Server struct {
 	store   dataStore
 	tracker ipTracker
+	ddns    ddnsService
+	zones   providers.ZoneLister
 	auth    *Auth
 	log     *slog.Logger
 	static  fs.FS
 }
 
-func NewServer(st dataStore, tr ipTracker, auth *Auth, log *slog.Logger, static fs.FS) *Server {
-	return &Server{store: st, tracker: tr, auth: auth, log: log, static: static}
+func NewServer(d Deps) *Server {
+	return &Server{store: d.Store, tracker: d.Tracker, ddns: d.DDNS, zones: d.Zones,
+		auth: d.Auth, log: d.Log, static: d.Static}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -58,6 +79,15 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/ip", s.handleIP)
 			r.Get("/ip/history", s.handleIPHistory)
 			r.Post("/ip/refresh", s.handleIPRefresh)
+
+			r.Get("/zones", s.handleZones)
+			r.Get("/records", s.handleListRecords)
+			r.Post("/records", s.handleCreateRecord)
+			r.Post("/records/sync", s.handleSyncAll)
+			r.Put("/records/{id}", s.handleUpdateRecord)
+			r.Delete("/records/{id}", s.handleDeleteRecord)
+			r.Post("/records/{id}/sync", s.handleSyncRecord)
+			r.Get("/updates", s.handleUpdateLog)
 		})
 
 		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
@@ -178,13 +208,13 @@ func (s *Server) handleIPHistory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleIPRefresh(w http.ResponseWriter, r *http.Request) {
-	// Prüfung auch dann zu Ende führen, wenn der Browser die Verbindung schließt.
+	// IP prüfen und alle Einträge abgleichen; auch dann zu Ende führen, wenn der Browser die Verbindung schließt.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 30*time.Second)
 	defer cancel()
-	state, err := s.tracker.Check(ctx)
+	state, err := s.ddns.RunCycle(ctx, store.TriggerManual)
 	if err != nil {
-		s.log.Error("manuelle IP-Prüfung fehlgeschlagen", "err", err)
-		writeError(w, http.StatusInternalServerError, "IP-Prüfung fehlgeschlagen")
+		s.log.Error("manueller Durchlauf fehlgeschlagen", "err", err)
+		writeError(w, http.StatusInternalServerError, "Aktualisierung fehlgeschlagen")
 		return
 	}
 	writeJSON(w, http.StatusOK, state)

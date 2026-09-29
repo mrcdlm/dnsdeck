@@ -4,6 +4,7 @@ import { Layout } from '@/components/Layout'
 import { RequireAuth } from '@/components/RequireAuth'
 import { Dashboard } from '@/pages/Dashboard'
 import { Login } from '@/pages/Login'
+import { Records } from '@/pages/Records'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="records" element={<Records />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

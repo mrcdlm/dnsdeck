@@ -1,14 +1,16 @@
-import { AlertTriangle, ArrowLeft, Globe, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ChevronRight, Globe, ListTree, Network, RefreshCw } from 'lucide-react'
+import { Link } from 'react-router'
 
 import { CopyButton } from '@/components/CopyButton'
 import { StatusBadge } from '@/components/StatusBadge'
+import { UpdateLogList } from '@/components/UpdateLogList'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Family, FamilyState } from '@/lib/api'
 import { absoluteTime, relativeTime, useNow } from '@/lib/format'
-import { useIP, useIPHistory, useRefreshIP } from '@/lib/queries'
+import { useIP, useIPHistory, useRecords, useRefreshIP } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 const familyLabel: Record<Family, string> = { ipv4: 'IPv4', ipv6: 'IPv6' }
@@ -98,16 +100,22 @@ function IPCard() {
           )}
         </CardDescription>
         <CardAction>
-          <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+          <Button
+            variant="outline"
+            onClick={() => refresh.mutate()}
+            disabled={refresh.isPending}
+            aria-label="Jetzt aktualisieren"
+            title="IP prüfen und alle Records abgleichen"
+          >
             <RefreshCw className={cn(refresh.isPending && 'animate-spin')} />
-            <span className="hidden sm:inline">Jetzt prüfen</span>
+            <span className="hidden sm:inline">Jetzt aktualisieren</span>
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {refresh.isError && (
           <p className="text-destructive text-sm" role="alert">
-            Prüfung fehlgeschlagen: {refresh.error.message}
+            Aktualisierung fehlgeschlagen: {refresh.error.message}
           </p>
         )}
         {ip.isPending ? (
@@ -175,15 +183,82 @@ function IPChangesCard() {
   )
 }
 
+function RecordsTile() {
+  const records = useRecords()
+  const counts = { ok: 0, error: 0, other: 0 }
+  for (const r of records.data ?? []) {
+    if (r.status === 'ok') counts.ok++
+    else if (r.status === 'error') counts.error++
+    else counts.other++
+  }
+  const total = records.data?.length ?? 0
+
+  return (
+    <Link
+      to="/records"
+      className="group bg-card hover:bg-accent/40 flex items-center gap-4 rounded-xl border p-5 transition-colors"
+    >
+      <span className="bg-muted grid size-10 shrink-0 place-items-center rounded-lg">
+        <ListTree className="size-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-muted-foreground text-sm">DNS-Records</div>
+        {records.isPending ? (
+          <Skeleton className="mt-1 h-6 w-32" />
+        ) : total === 0 ? (
+          <div className="font-medium">Noch keine Records</div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 font-medium">
+            <span>{total} verwaltet</span>
+            {counts.ok > 0 && <Badge variant="success">{counts.ok} aktuell</Badge>}
+            {counts.error > 0 && <Badge variant="destructive">{counts.error} Fehler</Badge>}
+            {counts.other > 0 && <Badge variant="secondary">{counts.other} sonstige</Badge>}
+          </div>
+        )}
+      </div>
+      <ChevronRight className="text-muted-foreground size-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  )
+}
+
+function TunnelsTile() {
+  return (
+    <div className="bg-card/50 text-muted-foreground flex items-center gap-4 rounded-xl border border-dashed p-5">
+      <span className="bg-muted grid size-10 shrink-0 place-items-center rounded-lg">
+        <Network className="size-5" />
+      </span>
+      <div>
+        <div className="text-sm">Cloudflare Tunnels</div>
+        <div className="text-sm">kommt in Meilenstein 3</div>
+      </div>
+    </div>
+  )
+}
+
 export function Dashboard() {
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Aktuelle öffentliche Adressen und letzte Änderungen</p>
+        <p className="text-muted-foreground text-sm">Öffentliche Adressen, DNS-Records und letzte Änderungen</p>
       </div>
       <IPCard />
-      <IPChangesCard />
+      <div className="grid gap-4 md:grid-cols-2">
+        <RecordsTile />
+        <TunnelsTile />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <IPChangesCard />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Letzte DNS-Updates</CardTitle>
+            <CardDescription>Änderungen an den verwalteten Records</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <UpdateLogList limit={5} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

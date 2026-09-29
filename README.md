@@ -3,8 +3,11 @@
 Selbst gehosteter DDNS-Updater mit Web-Dashboard und Cloudflare-Tunnel-Monitoring –
 ein Go-Binary mit eingebettetem React-Frontend, ausgeliefert als ein Container.
 
-**Stand:** Meilenstein 1 (Grundgerüst): Erkennung der öffentlichen IPv4/IPv6 per
-Mehrheitsentscheid mehrerer Quellen, IP-Verlauf in SQLite, Dashboard mit Login.
+**Stand:** Meilenstein 2
+- Erkennung der öffentlichen IPv4/IPv6 per Mehrheitsentscheid mehrerer Quellen, IP-Verlauf
+- DDNS mit Cloudflare: A-/AAAA-Records verwalten (Proxy, TTL), automatischer Abgleich
+  (nur bei Abweichung vom Ist-Zustand), Update-Protokoll
+- Dashboard, Records-Seite, Login
 
 ## Betrieb mit Docker Compose
 
@@ -21,7 +24,7 @@ Danach ist das Dashboard unter <http://localhost:8080> erreichbar
 | Variable        | Pflicht | Beschreibung                                            |
 |-----------------|---------|---------------------------------------------------------|
 | `APP_PASSWORD`  | ja      | Dashboard-Passwort (Klartext oder bcrypt-Hash)          |
-| `CF_API_TOKEN`  | ab M2   | Cloudflare-API-Token                                    |
+| `CF_API_TOKEN`  | für DDNS | Cloudflare-API-Token (Zone → DNS → Edit, Zone → Zone → Read) |
 | `CF_ACCOUNT_ID` | ab M3   | Cloudflare-Account-ID                                   |
 | `PORT`          | nein    | HTTP-Port, Default `8080`                               |
 | `LOG_LEVEL`     | nein    | `debug`, `info`, `warn`, `error`; Default `info`        |
@@ -38,6 +41,23 @@ APP_PASSWORD=test DATA_DIR=./data go run ./cmd/server
 # Frontend mit Hot Reload (Proxy auf :8080)
 cd web && npm install && npm run dev
 ```
+
+Ohne echtes Cloudflare-Token gegen eine nachgebaute API entwickeln
+(keine echten DNS-Einträge betroffen):
+
+```sh
+go run ./cmd/cfmock -token dev -zones example.com,example.org   # :8787
+CF_API_TOKEN=dev CF_API_BASE_URL=http://localhost:8787 \
+  APP_PASSWORD=test DATA_DIR=./data go run ./cmd/server
+curl localhost:8787/_records                  # Inhalt des Mocks
+curl -X POST 'localhost:8787/_fail?status=500' # Ausfall simulieren (status=0 beendet)
+```
+
+Hinweise zum Verhalten:
+- Records, die bei Cloudflare fehlen, werden angelegt (Kommentar „managed by dnsdeck“).
+- Entfernen in dnsdeck beendet nur die Verwaltung – der Eintrag bei Cloudflare bleibt.
+- Im Update-Protokoll landen Anlagen, Änderungen und Fehler; gleichbleibende
+  automatische Fehler nur einmal.
 
 Checks:
 
