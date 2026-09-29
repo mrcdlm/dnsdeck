@@ -51,8 +51,10 @@ export function useLogout() {
   return useMutation({
     mutationFn: api.logout,
     onSettled: () => {
-      qc.clear()
+      // Kein qc.clear(): das entfernt auch die Session-Query, ohne ihre
+      // Beobachter zu benachrichtigen – RequireAuth bekäme den Logout nie mit.
       qc.setQueryData(keys.session, { authenticated: false })
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== keys.session[0] })
     },
   })
 }
