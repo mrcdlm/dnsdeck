@@ -1,0 +1,12 @@
+.git
+.github
+.vscode
+.idea
+**/.env
+**/*.env
+data
+deploy
+web/node_modules
+web/dist
+*.md
+!web/**/*.md
