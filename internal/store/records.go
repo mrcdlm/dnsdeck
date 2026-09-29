@@ -21,15 +21,18 @@ const (
 )
 
 type Record struct {
-	ID               int64      `json:"id"`
-	Provider         string     `json:"provider"`
-	ZoneID           string     `json:"zone_id"`
-	ZoneName         string     `json:"zone_name"`
-	Name             string     `json:"name"`
-	Type             string     `json:"type"`
-	Proxied          bool       `json:"proxied"`
-	TTL              int        `json:"ttl"`
-	Enabled          bool       `json:"enabled"`
+	ID       int64  `json:"id"`
+	Provider string `json:"provider"`
+	ZoneID   string `json:"zone_id"`
+	ZoneName string `json:"zone_name"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Proxied  bool   `json:"proxied"`
+	TTL      int    `json:"ttl"`
+	Enabled  bool   `json:"enabled"`
+	// SettingsPending: Proxy/TTL wurden in dnsdeck geändert und sind noch
+	// nicht zu Cloudflare übertragen.
+	SettingsPending  bool       `json:"settings_pending"`
 	ProviderRecordID string     `json:"-"`
 	CurrentIP        string     `json:"current_ip,omitempty"`
 	Status           string     `json:"status"`
@@ -48,10 +51,17 @@ type RecordSyncState struct {
 	Message          string
 	CheckedAt        time.Time
 	Changed          bool // IP/Einstellungen wurden beim Provider geändert
+
+	// Proxy/TTL, wie sie jetzt beim Provider stehen (nil = unbekannt, z. B. bei
+	// Fehlern). Sie werden in dnsdeck übernommen, sofern dort keine
+	// Änderung aussteht; stimmen sie mit einer ausstehenden Änderung überein,
+	// gilt diese als übertragen.
+	Proxied *bool
+	TTL     *int
 }
 
 const recordCols = `id, provider, zone_id, zone_name, name, type, proxied, ttl, enabled,
-	provider_record_id, current_ip, status, message, last_checked_at, last_changed_at,
+	settings_pending, provider_record_id, current_ip, status, message, last_checked_at, last_changed_at,
 	created_at, updated_at`
 
 func (s *Store) CreateRecord(ctx context.Context, r Record) (Record, error) {
@@ -93,9 +103,14 @@ func (s *Store) UpdateRecordSettings(ctx context.Context, r Record) (Record, err
 		status = RecordPaused
 	}
 	_, err = s.db.ExecContext(ctx,
-		`UPDATE records SET zone_id = ?, zone_name = ?, name = ?, type = ?, proxied = ?, ttl = ?,
+		// SET-Ausdrücke sehen die alten Spaltenwerte: settings_pending wird nur
+		// gesetzt, wenn sich Proxy oder TTL tatsächlich ändern.
+		`UPDATE records SET
+			settings_pending = CASE WHEN proxied <> ? OR ttl <> ? THEN 1 ELSE settings_pending END,
+			zone_id = ?, zone_name = ?, name = ?, type = ?, proxied = ?, ttl = ?,
 			enabled = ?, provider_record_id = ?, status = ?, message = ?, updated_at = ?
 		 WHERE id = ?`,
+		r.Proxied, r.TTL,
 		r.ZoneID, r.ZoneName, r.Name, r.Type, r.Proxied, r.TTL, r.Enabled, providerID,
 		status, message, formatTime(time.Now()), r.ID)
 	if err != nil {
@@ -109,14 +124,27 @@ func (s *Store) SetRecordSyncState(ctx context.Context, id int64, st RecordSyncS
 	if st.Changed {
 		changedAt = formatTime(st.CheckedAt)
 	}
+	var proxied, ttl any
+	if st.Proxied != nil && st.TTL != nil {
+		proxied, ttl = *st.Proxied, *st.TTL
+	}
+	// Reihenfolge beachten: alle SET-Ausdrücke sehen die alten Werte.
+	//  - stimmen die Provider-Werte mit dnsdeck überein → Änderung übertragen
+	//  - sonst, wenn nichts aussteht → Provider-Werte übernehmen
+	//  - steht etwas aus (z. B. während des Abgleichs neu gespeichert) → behalten
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE records SET
-			provider_record_id = COALESCE(NULLIF(?, ''), provider_record_id),
-			current_ip = COALESCE(NULLIF(?, ''), current_ip),
-			status = ?, message = NULLIF(?, ''), last_checked_at = ?,
-			last_changed_at = COALESCE(?, last_changed_at)
-		 WHERE id = ?`,
-		st.ProviderRecordID, st.CurrentIP, st.Status, st.Message,
+			settings_pending = CASE
+				WHEN ?1 IS NOT NULL AND proxied = ?1 AND ttl = ?2 THEN 0
+				ELSE settings_pending END,
+			proxied = CASE WHEN ?1 IS NOT NULL AND settings_pending = 0 THEN ?1 ELSE proxied END,
+			ttl     = CASE WHEN ?2 IS NOT NULL AND settings_pending = 0 THEN ?2 ELSE ttl END,
+			provider_record_id = COALESCE(NULLIF(?3, ''), provider_record_id),
+			current_ip = COALESCE(NULLIF(?4, ''), current_ip),
+			status = ?5, message = NULLIF(?6, ''), last_checked_at = ?7,
+			last_changed_at = COALESCE(?8, last_changed_at)
+		 WHERE id = ?9`,
+		proxied, ttl, st.ProviderRecordID, st.CurrentIP, st.Status, st.Message,
 		formatTime(st.CheckedAt), changedAt, id)
 	return err
 }
@@ -165,7 +193,7 @@ func scanRecord(sc scanner) (Record, error) {
 		created, updated           string
 	)
 	err := sc.Scan(&r.ID, &r.Provider, &r.ZoneID, &r.ZoneName, &r.Name, &r.Type, &r.Proxied,
-		&r.TTL, &r.Enabled, &providerID, &currentIP, &r.Status, &msg, &checked, &changed,
+		&r.TTL, &r.Enabled, &r.SettingsPending, &providerID, &currentIP, &r.Status, &msg, &checked, &changed,
 		&created, &updated)
 	if err != nil {
 		return Record{}, err

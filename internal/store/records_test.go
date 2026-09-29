@@ -90,3 +90,64 @@ func TestUpdateLogFilter(t *testing.T) {
 		t.Fatalf("Limit: %d", len(l))
 	}
 }
+
+func TestSettingsPending(t *testing.T) {
+	s, ctx := openTest(t), context.Background()
+	r, _ := s.CreateRecord(ctx, Record{ZoneID: "z", ZoneName: "e.com", Name: "a.e.com", Type: "A", TTL: 1, Enabled: true})
+	if r.SettingsPending {
+		t.Fatal("neuer Record darf nicht pending sein")
+	}
+	yes, no, auto, fiveMin := true, false, 1, 300
+	get := func() Record {
+		t.Helper()
+		got, err := s.GetRecord(ctx, r.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	save := func(r Record) Record {
+		t.Helper()
+		got, err := s.UpdateRecordSettings(ctx, r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	sync := func(p *bool, ttl *int) Record {
+		t.Helper()
+		if err := s.SetRecordSyncState(ctx, r.ID, RecordSyncState{Status: RecordOK, CheckedAt: time.Now(), Proxied: p, TTL: ttl}); err != nil {
+			t.Fatal(err)
+		}
+		return get()
+	}
+
+	// Cloudflare-Werte werden übernommen, solange nichts aussteht
+	if got := sync(&yes, &auto); !got.Proxied || got.SettingsPending {
+		t.Fatalf("Übernahme: %+v", got)
+	}
+
+	// Nur "enabled" geändert → nicht pending
+	r = get()
+	r.Enabled = false
+	if got := save(r); got.SettingsPending {
+		t.Fatal("pending ohne Proxy/TTL-Änderung")
+	}
+
+	// TTL in dnsdeck geändert → pending; Cloudflare-Stand (alt) überschreibt nicht
+	r.Enabled, r.Proxied, r.TTL = true, false, 300
+	if got := save(r); !got.SettingsPending {
+		t.Fatal("pending erwartet")
+	}
+	if got := sync(&yes, &auto); got.Proxied || got.TTL != 300 || !got.SettingsPending {
+		t.Fatalf("ausstehende Änderung überschrieben: %+v", got)
+	}
+	// Fehler (keine Werte) ändert nichts
+	if got := sync(nil, nil); !got.SettingsPending {
+		t.Fatal("pending durch Fehler verloren")
+	}
+	// Übertragen → pending gelöscht
+	if got := sync(&no, &fiveMin); got.SettingsPending || got.TTL != 300 {
+		t.Fatalf("nach Übertragung: %+v", got)
+	}
+}

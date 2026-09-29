@@ -61,6 +61,9 @@ function RecordStatus({ record }: { record: DnsRecord }) {
   return (
     <>
       <Badge variant={st.variant}>{st.label}</Badge>
+      {record.settings_pending && (
+        <p className="text-warning mt-1 text-xs">Proxy/TTL-Änderung noch nicht übertragen</p>
+      )}
       {record.message && record.status !== 'ok' && (
         <p
           className={cn(

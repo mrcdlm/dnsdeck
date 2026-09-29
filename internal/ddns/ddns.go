@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,35 +118,89 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 		}
 		u.log.Info("DNS-Eintrag angelegt", "record", r.Name, "type", r.Type, "ip", ip)
 		u.writeLog(ctx, r, trigger, store.ResultCreated, "", ip, "bei Cloudflare angelegt", now)
-		return u.store.SetRecordSyncState(ctx, r.ID, store.RecordSyncState{
-			ProviderRecordID: created.ID, CurrentIP: created.Content, Status: store.RecordOK,
-			CheckedAt: now, Changed: true})
+		return u.store.SetRecordSyncState(ctx, r.ID, synced(created, now, true))
 	}
 	if err != nil {
 		return u.fail(ctx, r, ip, trigger, now, err)
 	}
 
+	// Proxy/TTL: Cloudflare hat das letzte Wort. dnsdeck überträgt sie nur,
+	// wenn sie in dnsdeck geändert wurden (SettingsPending); sonst werden die
+	// Werte von Cloudflare übernommen.
+	want := cur
+	want.Content = ip
+	if r.SettingsPending {
+		want.Proxied, want.TTL = r.Proxied, r.TTL
+	}
+	changes := settingChanges(cur, want)
 	ipDiffers := cur.Content != ip
-	settingsDiffer := cur.Proxied != r.Proxied || (!r.Proxied && cur.TTL != r.TTL)
-	if !ipDiffers && !settingsDiffer {
-		return u.store.SetRecordSyncState(ctx, r.ID, store.RecordSyncState{
-			ProviderRecordID: cur.ID, CurrentIP: cur.Content, Status: store.RecordOK, CheckedAt: now})
+	adopting := r.ProviderRecordID == "" // erstmals mit diesem Eintrag verknüpft
+
+	if !ipDiffers && len(changes) == 0 {
+		if adopting {
+			msg := fmt.Sprintf("bestehenden Eintrag übernommen (Proxy %s, TTL %s)", onOff(cur.Proxied), FormatTTL(cur.TTL))
+			u.log.Info("DNS-Eintrag übernommen", "record", r.Name, "type", r.Type, "proxied", cur.Proxied, "ttl", cur.TTL)
+			u.writeLog(ctx, r, trigger, store.ResultAdopted, cur.Content, cur.Content, msg, now)
+		} else if !r.SettingsPending && (cur.Proxied != r.Proxied || (!cur.Proxied && cur.TTL != r.TTL)) {
+			u.log.Info("Proxy/TTL von Cloudflare übernommen", "record", r.Name, "type", r.Type,
+				"proxied", cur.Proxied, "ttl", cur.TTL)
+		}
+		return u.store.SetRecordSyncState(ctx, r.ID, synced(cur, now, false))
 	}
 
-	want := cur
-	want.Content, want.TTL, want.Proxied = ip, r.TTL, r.Proxied
 	upd, err := u.provider.UpdateRecord(ctx, want)
 	if err != nil {
 		return u.fail(ctx, r, ip, trigger, now, err)
 	}
-	msg := ""
-	if !ipDiffers {
-		msg = "Proxy/TTL angepasst"
+	if adopting {
+		changes = append([]string{"bestehenden Eintrag übernommen"}, changes...)
 	}
-	u.log.Info("DNS-Eintrag aktualisiert", "record", r.Name, "type", r.Type, "old", cur.Content, "new", ip)
-	u.writeLog(ctx, r, trigger, store.ResultUpdated, cur.Content, ip, msg, now)
-	return u.store.SetRecordSyncState(ctx, r.ID, store.RecordSyncState{
-		ProviderRecordID: upd.ID, CurrentIP: upd.Content, Status: store.RecordOK, CheckedAt: now, Changed: true})
+	u.log.Info("DNS-Eintrag aktualisiert", "record", r.Name, "type", r.Type,
+		"old", cur.Content, "new", ip, "changes", strings.Join(changes, "; "))
+	u.writeLog(ctx, r, trigger, store.ResultUpdated, cur.Content, ip, strings.Join(changes, "; "), now)
+	return u.store.SetRecordSyncState(ctx, r.ID, synced(upd, now, true))
+}
+
+// synced beschreibt einen erfolgreichen Abgleich mit dem Stand beim Anbieter.
+func synced(p providers.Record, now time.Time, changed bool) store.RecordSyncState {
+	proxied, ttl := p.Proxied, p.TTL
+	return store.RecordSyncState{ProviderRecordID: p.ID, CurrentIP: p.Content, Status: store.RecordOK,
+		CheckedAt: now, Changed: changed, Proxied: &proxied, TTL: &ttl}
+}
+
+// settingChanges beschreibt Proxy-/TTL-Unterschiede, z. B. "Proxy: aus → an".
+// Bei proxied Einträgen setzt Cloudflare die TTL selbst; sie zählt dann nicht.
+func settingChanges(cur, want providers.Record) []string {
+	var out []string
+	if cur.Proxied != want.Proxied {
+		out = append(out, fmt.Sprintf("Proxy: %s → %s", onOff(cur.Proxied), onOff(want.Proxied)))
+	}
+	if !want.Proxied && cur.TTL != want.TTL {
+		out = append(out, fmt.Sprintf("TTL: %s → %s", FormatTTL(cur.TTL), FormatTTL(want.TTL)))
+	}
+	return out
+}
+
+func onOff(b bool) string {
+	if b {
+		return "an"
+	}
+	return "aus"
+}
+
+// FormatTTL formatiert eine TTL wie im Frontend (1 = automatisch).
+func FormatTTL(ttl int) string {
+	switch {
+	case ttl == 1:
+		return "Auto"
+	case ttl%86400 == 0:
+		return fmt.Sprintf("%d d", ttl/86400)
+	case ttl%3600 == 0:
+		return fmt.Sprintf("%d h", ttl/3600)
+	case ttl%60 == 0:
+		return fmt.Sprintf("%d min", ttl/60)
+	}
+	return fmt.Sprintf("%d s", ttl)
 }
 
 // fail speichert den Fehler am Record. Ins Update-Log kommt er nur, wenn er

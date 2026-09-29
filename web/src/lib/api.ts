@@ -44,6 +44,8 @@ export interface DnsRecord {
   proxied: boolean
   ttl: number
   enabled: boolean
+  /** Proxy/TTL in dnsdeck geändert, aber noch nicht zu Cloudflare übertragen */
+  settings_pending: boolean
   current_ip?: string
   status: RecordStatus
   message?: string
@@ -67,7 +69,7 @@ export interface Zone {
   name: string
 }
 
-export type UpdateResult = 'created' | 'updated' | 'error'
+export type UpdateResult = 'created' | 'adopted' | 'updated' | 'error'
 export type UpdateTrigger = 'scheduled' | 'manual' | 'record_saved'
 
 export interface UpdateLogEntry {
