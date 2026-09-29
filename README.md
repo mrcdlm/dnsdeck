@@ -55,6 +55,9 @@ curl -X POST 'localhost:8787/_fail?status=500' # Ausfall simulieren (status=0 be
 
 Hinweise zum Verhalten:
 - Records, die bei Cloudflare fehlen, werden angelegt (Kommentar „managed by dnsdeck“).
+- Bestehende Einträge werden mit ihren Cloudflare-Werten für Proxy/TTL übernommen.
+- Die IP erzwingt dnsdeck; bei Proxy/TTL hat Cloudflare das letzte Wort – dnsdeck
+  überträgt sie nur, wenn sie in dnsdeck geändert wurden.
 - Entfernen in dnsdeck beendet nur die Verwaltung – der Eintrag bei Cloudflare bleibt.
 - Im Update-Protokoll landen Anlagen, Änderungen und Fehler; gleichbleibende
   automatische Fehler nur einmal.
