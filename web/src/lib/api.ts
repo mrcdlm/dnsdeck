@@ -31,6 +31,58 @@ export interface IPChange {
   detected_at: string
 }
 
+export type RecordType = 'A' | 'AAAA'
+export type RecordStatus = 'pending' | 'ok' | 'error' | 'skipped' | 'paused'
+
+export interface DnsRecord {
+  id: number
+  provider: string
+  zone_id: string
+  zone_name: string
+  name: string
+  type: RecordType
+  proxied: boolean
+  ttl: number
+  enabled: boolean
+  current_ip?: string
+  status: RecordStatus
+  message?: string
+  last_checked_at?: string
+  last_changed_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface RecordInput {
+  zone_id: string
+  name: string
+  type: RecordType
+  proxied: boolean
+  ttl: number
+  enabled: boolean
+}
+
+export interface Zone {
+  id: string
+  name: string
+}
+
+export type UpdateResult = 'created' | 'updated' | 'error'
+export type UpdateTrigger = 'scheduled' | 'manual' | 'record_saved'
+
+export interface UpdateLogEntry {
+  id: number
+  record_id?: number
+  record_name: string
+  record_type: RecordType
+  trigger: UpdateTrigger
+  result: UpdateResult
+  old_ip?: string
+  new_ip?: string
+  message?: string
+  created_at: string
+}
+
 export interface Session {
   authenticated: boolean
 }
@@ -51,6 +103,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
+  if (res.status === 204) return undefined as T
   if (!res.ok) {
     let msg = `HTTP ${res.status}`
     try {
@@ -71,4 +124,12 @@ export const api = {
   ip: () => request<IPState>('GET', '/api/ip'),
   ipHistory: (limit = 20) => request<IPChange[]>('GET', `/api/ip/history?limit=${limit}`),
   refreshIP: () => request<IPState>('POST', '/api/ip/refresh'),
+  zones: () => request<Zone[]>('GET', '/api/zones'),
+  records: () => request<DnsRecord[]>('GET', '/api/records'),
+  createRecord: (r: RecordInput) => request<DnsRecord>('POST', '/api/records', r),
+  updateRecord: (id: number, r: RecordInput) => request<DnsRecord>('PUT', `/api/records/${id}`, r),
+  deleteRecord: (id: number) => request<void>('DELETE', `/api/records/${id}`),
+  syncRecord: (id: number) => request<DnsRecord>('POST', `/api/records/${id}/sync`),
+  syncAll: () => request<DnsRecord[]>('POST', '/api/records/sync'),
+  updates: (limit = 20) => request<UpdateLogEntry[]>('GET', `/api/updates?limit=${limit}`),
 }

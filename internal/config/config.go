@@ -19,6 +19,9 @@ type Config struct {
 	AppPassword string
 	CFAPIToken  string
 	CFAccountID string
+	// CFAPIBaseURL ersetzt die Cloudflare-API-Adresse (nur für Entwicklung
+	// gegen cmd/cfmock); leer = offizielle API.
+	CFAPIBaseURL string
 }
 
 // Load liest die Konfiguration über getenv (in Tests austauschbar).
@@ -30,6 +33,8 @@ func Load(getenv func(string) string) (*Config, error) {
 		AppPassword: getenv("APP_PASSWORD"),
 		CFAPIToken:  getenv("CF_API_TOKEN"),
 		CFAccountID: getenv("CF_ACCOUNT_ID"),
+
+		CFAPIBaseURL: getenv("CF_API_BASE_URL"),
 	}
 
 	if v := getenv("PORT"); v != "" {
@@ -73,5 +78,6 @@ func (c *Config) LogValue() slog.Value {
 		slog.String("data_dir", c.DataDir),
 		slog.Bool("cf_api_token_set", c.CFAPIToken != ""),
 		slog.Bool("cf_account_id_set", c.CFAccountID != ""),
+		slog.String("cf_api_base_url", c.CFAPIBaseURL),
 	)
 }

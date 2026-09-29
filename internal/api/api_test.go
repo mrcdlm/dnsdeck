@@ -14,25 +14,40 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/mrcdlm/dnsdeck/internal/ddns"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
+	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
+	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
-type fakeTracker struct{ checks int }
+type fakeTracker struct{}
 
-func (f *fakeTracker) State() ipdetect.State {
+func (fakeTracker) State() ipdetect.State {
 	return ipdetect.State{IPv4: ipdetect.FamilyState{IP: "203.0.113.1", Status: ipdetect.StatusOK}}
 }
 
-func (f *fakeTracker) Check(context.Context) (ipdetect.State, error) {
+// fakeDDNS nutzt den echten Updater mit fester IP gegen die Cloudflare-Nachbildung.
+type fakeDDNS struct {
+	u      *ddns.Updater
+	checks int
+}
+
+func (f *fakeDDNS) RunCycle(ctx context.Context, trigger string) (ipdetect.State, error) {
 	f.checks++
-	return f.State(), nil
+	st := fakeTracker{}.State()
+	return st, f.u.SyncAll(ctx, ddns.IPsFromState(st), trigger)
+}
+
+func (f *fakeDDNS) SyncRecord(ctx context.Context, id int64, trigger string) (store.Record, error) {
+	return f.u.SyncRecord(ctx, id, ddns.IPsFromState(fakeTracker{}.State()), trigger)
 }
 
 type testEnv struct {
 	srv     *httptest.Server
-	tracker *fakeTracker
+	tracker *fakeDDNS
 	auth    *Auth
+	cf      *cftest.Fake
 }
 
 func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
@@ -47,14 +62,21 @@ func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
 		t.Fatal(err)
 	}
 	auth.delay = 0
-	tr := &fakeTracker{}
 	if static == nil {
 		static = fstest.MapFS{}
 	}
-	s := NewServer(st, tr, auth, slog.New(slog.DiscardHandler), static)
+	log := slog.New(slog.DiscardHandler)
+	fake := cftest.New("tok", cftest.Zone{ID: "z1", Name: "example.com"})
+	cfSrv := httptest.NewServer(fake)
+	t.Cleanup(cfSrv.Close)
+	cf := cloudflare.New("tok", cfSrv.URL)
+	dd := &fakeDDNS{u: ddns.NewUpdater(st, cf, log)}
+
+	s := NewServer(Deps{Store: st, Tracker: fakeTracker{}, DDNS: dd, Zones: cf,
+		Auth: auth, Log: log, Static: static})
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
-	return &testEnv{srv: srv, tracker: tr, auth: auth}
+	return &testEnv{srv: srv, tracker: dd, auth: auth, cf: fake}
 }
 
 func (e *testEnv) do(t *testing.T, method, path, body string, cookie *http.Cookie) *http.Response {

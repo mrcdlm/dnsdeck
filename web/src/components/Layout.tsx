@@ -16,7 +16,7 @@ interface NavItem {
 // Nicht aktive Seiten werden in späteren Meilensteinen freigeschaltet.
 const nav: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/records', label: 'Records', icon: ListTree, soon: true },
+  { to: '/records', label: 'Records', icon: ListTree },
   { to: '/tunnels', label: 'Tunnels', icon: Network, soon: true },
   { to: '/verlauf', label: 'Verlauf', icon: History, soon: true },
   { to: '/einstellungen', label: 'Einstellungen', icon: Settings, soon: true },

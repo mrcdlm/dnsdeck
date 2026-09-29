@@ -14,7 +14,10 @@ import (
 
 	"github.com/mrcdlm/dnsdeck/internal/api"
 	"github.com/mrcdlm/dnsdeck/internal/config"
+	"github.com/mrcdlm/dnsdeck/internal/ddns"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
+	"github.com/mrcdlm/dnsdeck/internal/providers"
+	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/scheduler"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 	"github.com/mrcdlm/dnsdeck/web"
@@ -78,6 +81,19 @@ func run() error {
 		return fmt.Errorf("IP-Zustand laden: %w", err)
 	}
 
+	// Ohne Token läuft die App weiter; Records zeigen dann einen Fehlerstatus.
+	var (
+		provider providers.Provider
+		zones    providers.ZoneLister
+	)
+	if cfg.CFAPIToken != "" {
+		cf := cloudflare.New(cfg.CFAPIToken, cfg.CFAPIBaseURL)
+		provider, zones = cf, cf
+	} else {
+		log.Warn("CF_API_TOKEN nicht gesetzt – DNS-Updates sind deaktiviert")
+	}
+	svc := &ddns.Service{Tracker: tracker, Updater: ddns.NewUpdater(st, provider, log)}
+
 	auth, err := api.NewAuth(cfg.AppPassword, st)
 	if err != nil {
 		return err
@@ -86,10 +102,10 @@ func run() error {
 
 	sched := scheduler.New(log)
 	sched.Add(scheduler.Job{
-		Name:     "ip-check",
+		Name:     "ddns",
 		Interval: func() time.Duration { return settings.IPCheckInterval },
 		Run: func(ctx context.Context) error {
-			_, err := tracker.Check(ctx)
+			_, err := svc.RunCycle(ctx, store.TriggerScheduled)
 			return err
 		},
 	})
@@ -103,8 +119,11 @@ func run() error {
 	})
 
 	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Port),
-		Handler:           api.NewServer(st, tracker, auth, log, web.Dist()).Routes(),
+		Addr: fmt.Sprintf(":%d", cfg.Port),
+		Handler: api.NewServer(api.Deps{
+			Store: st, Tracker: tracker, DDNS: svc, Zones: zones,
+			Auth: auth, Log: log, Static: web.Dist(),
+		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
