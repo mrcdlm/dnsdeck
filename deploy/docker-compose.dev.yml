@@ -1,0 +1,23 @@
+# Lokale Entwicklung: baut das Image aus dem Quellcode (eine Ebene höher).
+#   docker compose -f docker-compose.dev.yml up -d --build
+services:
+  dnsdeck:
+    build:
+      context: ..
+      args:
+        VERSION: dev
+    image: dnsdeck:dev
+    container_name: dnsdeck
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file: .env
+    environment:
+      TZ: Europe/Berlin
+    volumes:
+      - ./data:/data:Z
+    healthcheck:
+      test: ["CMD", "/app/server", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -3,7 +3,7 @@
 Selbst gehosteter DDNS-Updater mit Web-Dashboard und Cloudflare-Tunnel-Monitoring –
 ein Go-Binary mit eingebettetem React-Frontend, ausgeliefert als ein Container.
 
-**Stand:** Meilenstein 4
+**Stand:** Meilenstein 5 (alle Meilensteine umgesetzt)
 - Erkennung der öffentlichen IPv4/IPv6 per Mehrheitsentscheid mehrerer Quellen, IP-Verlauf
 - DDNS mit Cloudflare: A-/AAAA-Records verwalten (Proxy, TTL), automatischer Abgleich
   (nur bei Abweichung vom Ist-Zustand), Update-Protokoll
@@ -14,18 +14,28 @@ ein Go-Binary mit eingebettetem React-Frontend, ausgeliefert als ein Container.
 - Verlauf (filterbar) und Einstellungen (Intervalle, IP-Quellen, Ereignisse –
   wirken ohne Neustart)
 - Dashboard, Records- und Tunnels-Seite, Login
+- CI/CD: GitHub Actions, Multi-Arch-Image (amd64 + arm64) auf ghcr.io, Release-Tags
 
-## Betrieb mit Docker Compose
+## Betrieb mit Docker Compose (Server)
 
 ```sh
-cd deploy
+# auf dem Server, z. B. /opt/stacks/dnsdeck/
+# docker-compose.yml und .env.example aus deploy/ dorthin kopieren
 cp .env.example .env              # Werte eintragen
 mkdir -p data && sudo chown 65532:65532 data   # Container läuft als UID 65532
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
 
-Danach ist das Dashboard unter <http://localhost:8080> erreichbar
-(Healthcheck: `/healthz`).
+Aktualisieren: `docker compose pull && docker compose up -d`. Das Dashboard ist
+unter `http://<server>:8080` erreichbar (Healthcheck: `/healthz`). Nicht ohne HTTPS
+ins Internet stellen – z. B. über einen Cloudflare Tunnel veröffentlichen.
+
+Ist das Paket auf ghcr.io privat, den Server einmalig anmelden
+(`docker login ghcr.io`, Token mit `read:packages`) oder das Paket auf GitHub
+auf „public“ stellen – das Image enthält keine Geheimnisse.
+
+Benötigte Cloudflare-Token-Rechte: Zone → DNS → Edit, Zone → Zone → Read,
+Account → Cloudflare Tunnel → Read.
 
 | Variable        | Pflicht | Beschreibung                                            |
 |-----------------|---------|---------------------------------------------------------|
@@ -79,6 +89,12 @@ Hinweise zum Verhalten:
   in der Oberfläche nur maskiert (Schema und Host). Ein dauerhafter DNS-Fehler wird
   einmal gemeldet, seine Behebung ebenfalls.
 
+Lokal als Container (baut aus dem Quellcode):
+
+```sh
+cd deploy && docker compose -f docker-compose.dev.yml up -d --build
+```
+
 Checks:
 
 ```sh
@@ -88,3 +104,18 @@ cd web && npm run lint && npm run build
 
 `npm run build` schreibt nach `web/dist/`; von dort wird das Frontend per
 `go:embed` ins Binary übernommen.
+
+## Releases
+
+GitHub Actions (`.github/workflows/`):
+
+- **CI** bei jedem Push/PR: `gofmt`, `go vet`, `go test`, Frontend-Lint und -Build.
+- **Release** bei Push auf `main`: Image `ghcr.io/mrcdlm/dnsdeck:main`.
+- **Release** bei Tag `vX.Y.Z`: Images `:X.Y.Z`, `:X.Y`, `:X`, `:latest` (amd64 + arm64)
+  und ein GitHub-Release mit automatischen Release Notes.
+
+```sh
+git tag v1.0.0 && git push origin v1.0.0
+```
+
+Die Version erscheint unter Einstellungen → System.
