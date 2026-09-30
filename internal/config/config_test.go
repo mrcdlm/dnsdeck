@@ -53,3 +53,27 @@ func TestLogValueHidesSecrets(t *testing.T) {
 		t.Fatalf("Flag fehlt: %s", out)
 	}
 }
+
+func TestLoadDNSCheck(t *testing.T) {
+	c, err := Load(env(map[string]string{"APP_PASSWORD": "x"}))
+	if err != nil || len(c.DNSCheckResolvers) != 4 || !c.DNSCheckAuthoritative {
+		t.Fatalf("default: %+v %v", c, err)
+	}
+	c, err = Load(env(map[string]string{"APP_PASSWORD": "x", "DNSCHECK_RESOLVERS": "off"}))
+	if err != nil || c.DNSCheckResolvers != nil || c.DNSCheckAuthoritative {
+		t.Fatalf("off: %+v %v", c, err)
+	}
+	c, err = Load(env(map[string]string{"APP_PASSWORD": "x", "DNSCHECK_RESOLVERS": "127.0.0.1:8553",
+		"DNSCHECK_AUTHORITATIVE": "off"}))
+	if err != nil || len(c.DNSCheckResolvers) != 1 || c.DNSCheckAuthoritative {
+		t.Fatalf("custom: %+v %v", c, err)
+	}
+	for _, m := range []map[string]string{
+		{"APP_PASSWORD": "x", "DNSCHECK_RESOLVERS": "dns.google"},
+		{"APP_PASSWORD": "x", "DNSCHECK_AUTHORITATIVE": "vielleicht"},
+	} {
+		if _, err := Load(env(m)); err == nil {
+			t.Errorf("%v: expected error", m)
+		}
+	}
+}

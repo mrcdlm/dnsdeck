@@ -10,6 +10,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/mrcdlm/dnsdeck/internal/dnscheck"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -28,6 +29,7 @@ func TestRecordsAuthRequired(t *testing.T) {
 		{"GET", "/api/zones"}, {"GET", "/api/records"}, {"POST", "/api/records"},
 		{"PUT", "/api/records/1"}, {"DELETE", "/api/records/1"},
 		{"POST", "/api/records/1/sync"}, {"POST", "/api/records/sync"}, {"GET", "/api/updates"},
+		{"POST", "/api/records/1/propagation"},
 	} {
 		if resp := e.do(t, p.m, p.path, "", nil); resp.StatusCode != 401 {
 			t.Errorf("%s %s: %d", p.m, p.path, resp.StatusCode)
@@ -159,5 +161,64 @@ func TestZonesNotConfigured(t *testing.T) {
 	}
 	if resp := e.do(t, "POST", "/api/records", `{"zone_id":"z1","name":"a.example.com","type":"A"}`, c); resp.StatusCode != 503 {
 		t.Fatalf("create: %d", resp.StatusCode)
+	}
+}
+
+// fakePropagation speichert ein festes Prüfergebnis.
+type fakePropagation struct{ st *store.Store }
+
+func (f fakePropagation) CheckNow(ctx context.Context, id int64) (dnscheck.Result, error) {
+	rec, err := f.st.GetRecord(ctx, id)
+	if err != nil {
+		return dnscheck.Result{}, err
+	}
+	if rec.CurrentIP == "" {
+		return dnscheck.Result{}, dnscheck.ErrNothingToCheck
+	}
+	res := dnscheck.Result{Status: dnscheck.StatusPropagated, Expected: rec.CurrentIP, Matching: 1, Total: 1}
+	b, _ := json.Marshal(res)
+	return res, f.st.SetRecordPropagation(ctx, id, b)
+}
+
+func (fakePropagation) Watching(id int64) bool { return id == 1 }
+
+func TestCheckPropagation(t *testing.T) {
+	e := newTestEnv(t, nil)
+	c := e.login(t)
+	rec := decode[store.Record](t, e.do(t, "POST", "/api/records", `{"zone_id":"z1","name":"home.example.com","type":"A"}`, c))
+
+	// Abgeschaltet
+	resp := e.do(t, "POST", fmt.Sprintf("/api/records/%d/propagation", rec.ID), "", c)
+	if resp.StatusCode != 404 || decode[map[string]string](t, resp)["code"] != "dnscheck.disabled" {
+		t.Fatalf("disabled: %d", resp.StatusCode)
+	}
+
+	e.api.propagation = fakePropagation{st: e.api.store.(*store.Store)}
+	resp = e.do(t, "POST", fmt.Sprintf("/api/records/%d/propagation", rec.ID), "", c)
+	if resp.StatusCode != 200 {
+		t.Fatalf("check: %d", resp.StatusCode)
+	}
+	got := decode[struct {
+		Propagation dnscheck.Result `json:"propagation"`
+		Watching    bool            `json:"propagation_watching"`
+	}](t, resp)
+	if got.Propagation.Status != dnscheck.StatusPropagated || got.Propagation.Expected != "203.0.113.1" || !got.Watching {
+		t.Fatalf("%+v", got)
+	}
+	list := decode[[]map[string]any](t, e.do(t, "GET", "/api/records", "", c))
+	if p, ok := list[0]["propagation"].(map[string]any); !ok || p["status"] != "propagated" {
+		t.Fatalf("list: %+v", list[0])
+	}
+
+	// AAAA ohne IPv6 → nichts zu prüfen
+	v6 := decode[store.Record](t, e.do(t, "POST", "/api/records", `{"zone_id":"z1","name":"home.example.com","type":"AAAA"}`, c))
+	if v6.CurrentIP == "" {
+		resp = e.do(t, "POST", fmt.Sprintf("/api/records/%d/propagation", v6.ID), "", c)
+		if resp.StatusCode != 409 {
+			t.Fatalf("no ip: %d", resp.StatusCode)
+		}
+	}
+	if resp := e.do(t, "POST", "/api/records/999/propagation", "", c); resp.StatusCode != 404 {
+		t.Fatalf("missing: %d", resp.StatusCode)
 	}
 }

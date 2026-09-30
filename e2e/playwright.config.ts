@@ -25,7 +25,8 @@ export default defineConfig({
     {
       command:
         'go run ../cmd/cfmock -addr :8787 -token dev -zones example.com,example.org ' +
-        '-account dev-account -tunnels home:healthy,nas:degraded,backup:down',
+        '-account dev-account -tunnels home:healthy,nas:degraded,backup:down ' +
+        '-dns 127.0.0.1:8553 -dns-lagged 127.0.0.1:8554 -dns-lag 15s',
       url: 'http://localhost:8787/_records',
       reuseExistingServer: false,
       timeout: 120_000,

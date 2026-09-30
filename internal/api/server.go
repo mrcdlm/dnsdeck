@@ -53,32 +53,35 @@ type Deps struct {
 	Webhooks webhookTester
 	// WebhookEnv: Zugriff auf Env-Variablen, um fehlende WEBHOOK_* anzuzeigen
 	WebhookEnv notify.Env
-	Info       Info
-	Auth       *Auth
-	Log        *slog.Logger
-	Static     fs.FS
+	// Propagation: DNS-Verbreitungsprüfung (nil = abgeschaltet)
+	Propagation PropagationChecker
+	Info        Info
+	Auth        *Auth
+	Log         *slog.Logger
+	Static      fs.FS
 }
 
 type Server struct {
-	store      dataStore
-	tracker    ipTracker
-	ddns       ddnsService
-	zones      providers.ZoneLister
-	tunnels    tunnelService
-	events     eventSource
-	settings   settingsService
-	webhooks   webhookTester
-	webhookEnv notify.Env
-	info       Info
-	auth       *Auth
-	log        *slog.Logger
-	static     fs.FS
+	store       dataStore
+	tracker     ipTracker
+	ddns        ddnsService
+	zones       providers.ZoneLister
+	tunnels     tunnelService
+	events      eventSource
+	settings    settingsService
+	webhooks    webhookTester
+	webhookEnv  notify.Env
+	propagation PropagationChecker
+	info        Info
+	auth        *Auth
+	log         *slog.Logger
+	static      fs.FS
 }
 
 func NewServer(d Deps) *Server {
 	return &Server{store: d.Store, tracker: d.Tracker, ddns: d.DDNS, zones: d.Zones,
 		tunnels: d.Tunnels, events: d.Events, settings: d.Settings, webhooks: d.Webhooks,
-		webhookEnv: d.WebhookEnv, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
+		webhookEnv: d.WebhookEnv, propagation: d.Propagation, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -107,6 +110,7 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/records/{id}", s.handleUpdateRecord)
 			r.Delete("/records/{id}", s.handleDeleteRecord)
 			r.Post("/records/{id}/sync", s.handleSyncRecord)
+			r.Post("/records/{id}/propagation", s.handleCheckPropagation)
 			r.Get("/updates", s.handleUpdateLog)
 
 			r.Get("/tunnels", s.handleTunnels)

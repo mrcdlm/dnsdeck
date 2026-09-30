@@ -50,6 +50,7 @@ func (f *fakeDDNS) SyncRecord(ctx context.Context, id int64, trigger string) (st
 
 type testEnv struct {
 	srv      *httptest.Server
+	api      *Server
 	tracker  *fakeDDNS
 	auth     *Auth
 	cf       *cftest.Fake
@@ -113,7 +114,7 @@ func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
 		Info: Info{Version: "v1.2.3", CFTokenSet: true}, Auth: auth, Log: log, Static: static})
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
-	return &testEnv{srv: srv, tracker: dd, auth: auth, cf: fake, broker: broker, hooks: hooks, hookURL: hookSrv.URL}
+	return &testEnv{srv: srv, api: s, tracker: dd, auth: auth, cf: fake, broker: broker, hooks: hooks, hookURL: hookSrv.URL}
 }
 
 func (e *testEnv) do(t *testing.T, method, path, body string, cookie *http.Cookie) *http.Response {

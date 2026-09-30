@@ -10,6 +10,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/mrcdlm/dnsdeck/internal/dnscheck"
 )
 
 type Config struct {
@@ -22,6 +24,10 @@ type Config struct {
 	// CFAPIBaseURL ersetzt die Cloudflare-API-Adresse (nur für Entwicklung
 	// gegen cmd/cfmock); leer = offizielle API.
 	CFAPIBaseURL string
+	// DNSCheckResolvers: Resolver für die Verbreitungsprüfung (nil = aus).
+	DNSCheckResolvers []dnscheck.Resolver
+	// DNSCheckAuthoritative: zusätzlich die Nameserver der Zone fragen.
+	DNSCheckAuthoritative bool
 }
 
 // Load liest die Konfiguration über getenv (in Tests austauschbar).
@@ -52,6 +58,18 @@ func Load(getenv func(string) string) (*Config, error) {
 	if v := getenv("DATA_DIR"); v != "" {
 		c.DataDir = v
 	}
+	resolvers, err := dnscheck.ParseResolvers(getenv("DNSCHECK_RESOLVERS"))
+	if err != nil {
+		return nil, err
+	}
+	c.DNSCheckResolvers = resolvers
+	switch v := strings.ToLower(strings.TrimSpace(getenv("DNSCHECK_AUTHORITATIVE"))); v {
+	case "", "on":
+		c.DNSCheckAuthoritative = resolvers != nil
+	case "off":
+	default:
+		return nil, fmt.Errorf("invalid DNSCHECK_AUTHORITATIVE: %q (on|off)", v)
+	}
 	if c.AppPassword == "" {
 		return nil, errors.New("APP_PASSWORD must be set")
 	}
@@ -79,5 +97,7 @@ func (c *Config) LogValue() slog.Value {
 		slog.Bool("cf_api_token_set", c.CFAPIToken != ""),
 		slog.Bool("cf_account_id_set", c.CFAccountID != ""),
 		slog.String("cf_api_base_url", c.CFAPIBaseURL),
+		slog.Int("dnscheck_resolvers", len(c.DNSCheckResolvers)),
+		slog.Bool("dnscheck_authoritative", c.DNSCheckAuthoritative),
 	)
 }

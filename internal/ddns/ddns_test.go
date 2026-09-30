@@ -308,3 +308,36 @@ func TestRecoveryIsLoggedAndNotified(t *testing.T) {
 		t.Fatalf("Status: %+v", got)
 	}
 }
+
+func TestOnChangeStartsPropagationCheck(t *testing.T) {
+	e, ctx := setup(t), context.Background()
+	var calls []int64
+	e.u.OnChange = func(id int64) { calls = append(calls, id) }
+	r := e.add(t, "home.example.com", "A", 300, false)
+
+	sync := func(ips IPs) {
+		t.Helper()
+		if err := e.u.SyncAll(ctx, ips, store.TriggerScheduled); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sync(ips1) // angelegt
+	if len(calls) != 1 || calls[0] != r.ID {
+		t.Fatalf("create: %v", calls)
+	}
+	sync(ips1) // unverändert, aber noch nie geprüft
+	if len(calls) != 2 {
+		t.Fatalf("unchecked: %v", calls)
+	}
+	if err := e.st.SetRecordPropagation(ctx, r.ID, []byte(`{"status":"propagated"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sync(ips1) // unverändert und geprüft → nichts zu tun
+	if len(calls) != 2 {
+		t.Fatalf("unchanged: %v", calls)
+	}
+	sync(IPs{V4: "203.0.113.9"}) // IP-Wechsel
+	if len(calls) != 3 {
+		t.Fatalf("update: %v", calls)
+	}
+}

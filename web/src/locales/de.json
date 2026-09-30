@@ -271,10 +271,10 @@
     "sourcesMin": "Mindestens {{min}} Quellen aktivieren.",
     "moveUp": "{{name}} nach oben",
     "moveDown": "{{name}} nach unten",
-    "notifications": "Benachrichtigungen",
-    "notificationsHint": "Gilt für alle Webhooks.",
+    "notifications": "Sprache",
+    "notificationsHint": "Titel und Text aller Webhook-Nachrichten.",
     "notifyLanguage": "Sprache der Benachrichtigungen",
-    "notifyLanguageHint": "Titel und Text der Nachrichten an Webhooks. Unabhängig von der Sprache der Oberfläche.",
+    "notifyLanguageHint": "Unabhängig von der Sprache der Oberfläche, die jeder Browser selbst wählt.",
     "saved": "Gespeichert",
     "discard": "Verwerfen"
   },
@@ -357,5 +357,44 @@
     "dataDir": "Datenverzeichnis",
     "set": "gesetzt",
     "missing": "fehlt"
+  },
+  "propagation": {
+    "title": "DNS-Verbreitung",
+    "detailsLabel": "DNS-Verbreitung von {{name}}",
+    "checking": "wird geprüft …",
+    "unknown": "—",
+    "resolved": "aufgelöst",
+    "someFailed": "Einige Server haben nicht geantwortet",
+    "status": {
+      "propagated": "Überall aktuell",
+      "partial": "Teilweise verbreitet – einige Resolver liefern noch den alten Stand aus ihrem Cache",
+      "pending": "Noch nicht verbreitet",
+      "error": "Fehler"
+    },
+    "error": {
+      "timeout": "Zeitüberschreitung",
+      "failed": "Fehler"
+    },
+    "notFound": "nicht vorhanden",
+    "expect": "erwartet: {{ip}}",
+    "expectProxied": "proxied – IP verborgen, geprüft wird nur die Auflösbarkeit",
+    "never": "Noch nicht geprüft.",
+    "stale": "Veraltet – der Record hat sich seit der Prüfung geändert",
+    "etaSeconds_one": "spätestens in {{count}} Sekunde überall",
+    "etaSeconds_other": "spätestens in {{count}} Sekunden überall",
+    "eta_one": "spätestens in ~{{count}} Minute überall",
+    "eta_other": "spätestens in ~{{count}} Minuten überall",
+    "col": {
+      "server": "Server",
+      "answer": "Antwort",
+      "match": "Passt"
+    },
+    "authoritative": "autoritativ",
+    "match": "passt",
+    "noMatch": "passt nicht",
+    "checkedAt": "Geprüft {{time}}",
+    "watching": "wird automatisch wiederholt",
+    "checkNow": "Jetzt prüfen",
+    "disabled": "DNS-Verbreitungsprüfung abgeschaltet (DNSCHECK_RESOLVERS=off)"
   }
 }
