@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] – 2026-09-30
+
+### Fixed
+- The sidebar (live status, language, theme, sign out) stays visible on long pages instead
+  of scrolling away.
+- Update log and record messages written before 0.2.0 are now translated as well: known
+  German texts are converted once on start.
+
 ## [0.2.0] – 2026-09-30
 
 ### Added
@@ -22,8 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no `latest`); host port (`DNSDECK_PORT`) and time zone (`TZ`, default `UTC`) are configurable.
 - Documentation in English and German, MIT license.
 
-### Notes
-- Update log entries written by 0.1.0 keep their original German text.
 
 ## [0.1.0] – 2026-09-30
 
@@ -39,6 +45,7 @@ First public release.
   Home Assistant; secrets referenced from environment variables.
 - Single-container deployment (distroless, non-root, amd64 and arm64) published to ghcr.io.
 
-[Unreleased]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mrcdlm/dnsdeck/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mrcdlm/dnsdeck/releases/tag/v0.1.0

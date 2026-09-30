@@ -94,3 +94,30 @@ func TestFromRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestParseLegacy(t *testing.T) {
+	for text, en := range map[string]string{
+		"bestehenden Eintrag übernommen (Proxy aus, TTL 1 h)":                                        "adopted existing record (proxy off, TTL 1 h)",
+		"bestehenden Eintrag übernommen (Proxy an, TTL Auto)":                                        "adopted existing record (proxy on, TTL Auto)",
+		"bei Cloudflare angelegt":                                                                    "created at Cloudflare",
+		"bestehenden Eintrag übernommen; Proxy: aus → an":                                            "adopted existing record; Proxy: off → on",
+		"Proxy: an → aus; TTL: Auto → 5 min":                                                         "Proxy: on → off; TTL: Auto → 5 min",
+		"Abgleich wieder erfolgreich":                                                                "Sync successful again",
+		"Abgleich wieder erfolgreich (vorher: Cloudflare-API: HTTP 500: simulierter Fehler (10001))": "Sync successful again (previously: Cloudflare API: HTTP 500: simulierter Fehler (10001))",
+		"keine öffentliche IPv6-Adresse bekannt":                                                     "no public IPv6 address known",
+	} {
+		m, ok := ParseLegacy(text)
+		if !ok {
+			t.Errorf("%q: not recognized", text)
+			continue
+		}
+		if got := T(EN, m); got != en {
+			t.Errorf("%q: got %q, want %q", text, got, en)
+		}
+	}
+	for _, text := range []string{"", "irgendein anderer Text", "dial tcp: connection refused"} {
+		if _, ok := ParseLegacy(text); ok {
+			t.Errorf("%q: should not be recognized", text)
+		}
+	}
+}
