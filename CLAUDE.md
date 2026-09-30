@@ -25,6 +25,7 @@ Läuft als **ein einziger Docker-Container** auf openSUSE MicroOS (Docker Compos
 /internal/ipdetect   Ermittlung öffentlicher IPv4/IPv6
 /internal/providers  DNS-Provider (Interface + cloudflare/ als erste Implementierung)
 /internal/tunnels    Cloudflare-Tunnel-Monitoring
+/internal/notify     Benachrichtigungen (generische Webhooks)
 /internal/scheduler  periodische Jobs
 /internal/store      SQLite, Migrationen
 /internal/api        HTTP-Handler, SSE
@@ -53,20 +54,28 @@ Läuft als **ein einziger Docker-Container** auf openSUSE MicroOS (Docker Compos
 - Polling-Intervall konfigurierbar (Default 60 s), Statusänderungen in DB speichern → Uptime-Verlauf
 - Optional später: zugehörige Public Hostnames aus der Tunnel-Konfiguration anzeigen
 
-### Benachrichtigungen (Meilenstein 3)
-- Bei IP-Wechsel, fehlgeschlagenem Update, Tunnel-Statuswechsel
-- Über Webhook + ntfy + Gotify (einfaches Interface, später erweiterbar)
+### Benachrichtigungen (Meilenstein 4)
+- Bei IP-Wechsel, fehlgeschlagenem Update, wieder erfolgreichem Update, Tunnel-Statuswechsel
+- **Nur generische Webhooks**, keine produktspezifischen Kanäle: beliebig viele, je Webhook
+  Methode, URL, Header, Content-Type, Body-Template (Go `text/template`) und eigene Ereignisauswahl
+- Konfiguration in der UI (Einstellungen), gespeichert in der DB; Vorschau mit Beispielereignis und Test je Webhook
+- Dienste wie ntfy, Gotify, Discord, Slack, Telegram, Home Assistant nur als **Vorlagen** im Frontend,
+  kein eigener Code pro Dienst
 
 ### UI-Seiten
 - **Dashboard:** große IP-Karte (v4/v6, seit wann), Status-Kacheln für Records und Tunnels, letzte Ereignisse
 - **Records:** Tabelle aller verwalteten Records, hinzufügen/bearbeiten/löschen, Status-Badge
 - **Tunnels:** Karten je Tunnel mit Status, Verbindungen, Uptime-Balken der letzten 24 h / 7 Tage
 - **Verlauf:** IP-Wechsel und Update-Log, filterbar
-- **Einstellungen:** Intervalle, IP-Quellen, Benachrichtigungen
+- **Einstellungen:** Intervalle, IP-Quellen, Webhooks
 
 ## Konfiguration & Sicherheit
 - Secrets **nur** per Env-Variable, niemals in DB, Logs oder API-Antworten:
   `CF_API_TOKEN`, `CF_ACCOUNT_ID`, `APP_PASSWORD`
+- Webhook-Geheimnisse (Tokens, geheime URLs) ebenfalls nur per Env-Variable mit Präfix `WEBHOOK_`;
+  in der DB stehen nur Platzhalter: `${WEBHOOK_NAME}` in URL/Headern, `{{env "WEBHOOK_NAME"}}` im Body
+  - Nur Variablen mit Präfix `WEBHOOK_` sind auflösbar (kein Zugriff auf `CF_API_TOKEN`, `APP_PASSWORD` o. ä.)
+  - Platzhalter nur im konfigurierten Text ersetzen, nie in Ereignisdaten; Vorschau und Fehlermeldungen ohne aufgelöste Werte
 - Benötigte Token-Rechte: Zone → DNS → Edit, Zone → Zone → Read, Account → Cloudflare Tunnel → Read
 - Login mit einem Passwort (bcrypt-Vergleich gegen `APP_PASSWORD`), Session-Cookie `HttpOnly`, `SameSite=Strict`
 - Healthcheck-Endpoint `/healthz` (ohne Auth)
@@ -83,5 +92,5 @@ Läuft als **ein einziger Docker-Container** auf openSUSE MicroOS (Docker Compos
 1. **Grundgerüst:** Go-Server, SQLite + Migrationen, IP-Erkennung, Dashboard mit IP-Anzeige, Dockerfile, Compose
 2. **DDNS Cloudflare:** Records verwalten, Scheduler, Update-Log, Records-Seite
 3. **Tunnel-Monitoring:** Tunnels-Seite, Statusverlauf, SSE-Live-Updates
-4. **Benachrichtigungen + Verlauf-Seite**
+4. **Benachrichtigungen (generische Webhooks) + Verlauf-Seite + Einstellungen**
 5. **CI/CD:** GitHub Actions, Multi-Arch-Image auf ghcr.io, Release-Tags
