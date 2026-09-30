@@ -102,19 +102,19 @@ test('Cloudflare-Ausfall: Fehler, danach „Behoben“', async ({ page }) => {
 test('Bestehenden Eintrag übernehmen: Proxy von Cloudflare bleibt', async ({ page }) => {
   const zone = (await api<{ id: string; name: string }[]>(page, 'GET', '/api/zones')).json.find((z) => z.name === 'example.com')!
   const ip = (await api<{ ipv4: { ip: string } }>(page, 'GET', '/api/ip')).json.ipv4.ip
-  await cf.create(zone.id, { name: 'immich.example.com', type: 'A', content: ip, ttl: 1, proxied: true })
+  await cf.create(zone.id, { name: 'app.example.com', type: 'A', content: ip, ttl: 1, proxied: true })
 
-  await addRecord(page, 'immich', 'example.com') // Dialog-Voreinstellung: Proxy aus
-  await expect(row(page, 'immich.example.com', 'A').getByLabel('Proxied')).toBeVisible()
-  expect((await cf.records()).find((r) => r.name === 'immich.example.com')?.proxied).toBe(true)
+  await addRecord(page, 'app', 'example.com') // Dialog-Voreinstellung: Proxy aus
+  await expect(row(page, 'app.example.com', 'A').getByLabel('Proxied')).toBeVisible()
+  expect((await cf.records()).find((r) => r.name === 'app.example.com')?.proxied).toBe(true)
   await expect(page.getByText('bestehenden Eintrag übernommen (Proxy an, TTL Auto)')).toBeVisible()
 
   // Proxy im Cloudflare-Dashboard aus → dnsdeck übernimmt, dreht nicht zurück
-  const rec = (await cf.records()).find((r) => r.name === 'immich.example.com')!
+  const rec = (await cf.records()).find((r) => r.name === 'app.example.com')!
   await cf.patch(zone.id, rec.id, { proxied: false })
   await page.getByRole('button', { name: 'Jetzt aktualisieren' }).click()
-  await expect(row(page, 'immich.example.com', 'A').getByLabel('Nur DNS')).toBeVisible()
-  expect((await cf.records()).find((r) => r.name === 'immich.example.com')?.proxied).toBe(false)
+  await expect(row(page, 'app.example.com', 'A').getByLabel('Nur DNS')).toBeVisible()
+  expect((await cf.records()).find((r) => r.name === 'app.example.com')?.proxied).toBe(false)
 })
 
 test('Records mobil als Karten mit Aktionen', async ({ page }) => {

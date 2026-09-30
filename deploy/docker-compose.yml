@@ -1,23 +1,28 @@
-# Stack: /opt/stacks/dnsdeck, Daten: /srv/dnsdeck, Version in .env
-# Einmalig: mkdir -p /srv/dnsdeck && chown 65532:65532 /srv/dnsdeck
-# Update: DNSDECK_VERSION in .env erhöhen (Release Notes lesen), dann
+# dnsdeck – Docker Compose
+#
+#   1. cp .env.example .env              and fill in the values
+#   2. mkdir -p data && sudo chown 65532:65532 data   (the container runs as UID 65532)
+#   3. docker compose pull && docker compose up -d
+#
+# Update: read the release notes, raise DNSDECK_VERSION in .env, then
 #   docker compose pull && docker compose up -d
-# Lokal aus dem Quellcode bauen: docker-compose.dev.yml
 name: dnsdeck
 services:
   dnsdeck:
-    # Feste Version aus .env, nie latest
-    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?DNSDECK_VERSION in .env setzen, z. B. 0.1.0}
+    # Pinned version from .env – intentionally no "latest"
+    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?Set DNSDECK_VERSION in .env, e.g. 0.1.0}
     container_name: dnsdeck
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${DNSDECK_PORT:-8080}:8080"
     env_file: .env
     environment:
-      TZ: Europe/Berlin
+      TZ: ${TZ:-UTC}
     volumes:
-      # ":Z" setzt das SELinux-Label (auf MicroOS nötig)
-      - /srv/dnsdeck:/data:Z
+      # To store data elsewhere, replace ./data with an absolute path (e.g. /srv/dnsdeck).
+      # ":Z" relabels the directory on SELinux hosts (Fedora, RHEL, openSUSE MicroOS …)
+      # and is ignored elsewhere.
+      - ./data:/data:Z
     healthcheck:
       test: ["CMD", "/app/server", "healthcheck"]
       interval: 30s

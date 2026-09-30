@@ -1,4 +1,4 @@
-# Lokale Entwicklung: baut das Image aus dem Quellcode (eine Ebene höher).
+# Local development: builds the image from source (repository root).
 #   docker compose -f docker-compose.dev.yml up -d --build
 services:
   dnsdeck:
@@ -10,10 +10,10 @@ services:
     container_name: dnsdeck
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${DNSDECK_PORT:-8080}:8080"
     env_file: .env
     environment:
-      TZ: Europe/Berlin
+      TZ: ${TZ:-UTC}
     volumes:
       - ./data:/data:Z
     healthcheck:

@@ -126,8 +126,8 @@ func TestUpdatesOnIPChange(t *testing.T) {
 // (voreingestellten) Dialog; geändert wird nur die IP.
 func TestAdoptKeepsCloudflareSettings(t *testing.T) {
 	e, ctx := setup(t), context.Background()
-	e.fake.AddRecord(cftest.Record{ZoneID: "z1", Name: "immich.example.com", Type: "A", Content: "1.2.3.4", TTL: 1, Proxied: true})
-	r := e.add(t, "immich.example.com", "A", 1, false) // Dialog-Voreinstellung: Proxy aus
+	e.fake.AddRecord(cftest.Record{ZoneID: "z1", Name: "app.example.com", Type: "A", Content: "1.2.3.4", TTL: 1, Proxied: true})
+	r := e.add(t, "app.example.com", "A", 1, false) // Dialog-Voreinstellung: Proxy aus
 
 	e.u.SyncAll(ctx, ips1, store.TriggerRecordSaved)
 	cf := e.fake.Records()[0]

@@ -100,8 +100,12 @@ jobs:
         with:
           generate_release_notes: true
           body: |
-            Image: `ghcr.io/${{ github.repository_owner }}/dnsdeck:${{ github.ref_name }}`
+            **Image:** `ghcr.io/${{ github.repository_owner }}/dnsdeck` (linux/amd64, linux/arm64)
+
+            To update, set `DNSDECK_VERSION` in `.env` to this version (without "v"), then run:
 
             ```sh
             docker compose pull && docker compose up -d
             ```
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
