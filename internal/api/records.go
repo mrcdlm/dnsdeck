@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
@@ -224,6 +225,9 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.internalError(w, "Record löschen", err)
 		return
+	}
+	if s.events != nil {
+		s.events.Publish(events.TopicRecords)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

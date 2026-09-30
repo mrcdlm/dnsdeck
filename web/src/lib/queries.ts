@@ -1,32 +1,35 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, type RecordInput } from './api'
+import { useLive } from './live-context'
+import { keys } from './queries-keys'
 
-export const keys = {
-  session: ['session'] as const,
-  ip: ['ip'] as const,
-  ipHistory: ['ip', 'history'] as const,
-  zones: ['zones'] as const,
-  records: ['records'] as const,
-  updates: ['updates'] as const,
-}
+export { keys }
 
-// Bis SSE (Meilenstein 3) verfügbar ist, wird regelmäßig nachgeladen.
+// Ohne Live-Verbindung (SSE) wird regelmäßig nachgeladen; mit ihr nur noch
+// selten als Absicherung.
 const POLL_MS = 30_000
+const LIVE_POLL_MS = 5 * 60_000
+
+function usePollInterval() {
+  return useLive() ? LIVE_POLL_MS : POLL_MS
+}
 
 export function useSession() {
   return useQuery({ queryKey: keys.session, queryFn: api.session, staleTime: 60_000 })
 }
 
 export function useIP() {
-  return useQuery({ queryKey: keys.ip, queryFn: api.ip, refetchInterval: POLL_MS })
+  const poll = usePollInterval()
+  return useQuery({ queryKey: keys.ip, queryFn: api.ip, refetchInterval: poll })
 }
 
 export function useIPHistory(limit = 20) {
+  const poll = usePollInterval()
   return useQuery({
     queryKey: [...keys.ipHistory, limit],
     queryFn: () => api.ipHistory(limit),
-    refetchInterval: POLL_MS,
+    refetchInterval: poll,
   })
 }
 
@@ -59,14 +62,16 @@ export function useZones(enabled = true) {
 }
 
 export function useRecords() {
-  return useQuery({ queryKey: keys.records, queryFn: api.records, refetchInterval: POLL_MS })
+  const poll = usePollInterval()
+  return useQuery({ queryKey: keys.records, queryFn: api.records, refetchInterval: poll })
 }
 
 export function useUpdates(limit = 20) {
+  const poll = usePollInterval()
   return useQuery({
     queryKey: [...keys.updates, limit],
     queryFn: () => api.updates(limit),
-    refetchInterval: POLL_MS,
+    refetchInterval: poll,
   })
 }
 
@@ -87,6 +92,19 @@ export function useDeleteRecord() {
 export function useSyncRecord() {
   const invalidate = useInvalidateAll()
   return useMutation({ mutationFn: api.syncRecord, onSettled: invalidate })
+}
+
+export function useTunnels() {
+  const poll = usePollInterval()
+  return useQuery({ queryKey: keys.tunnels, queryFn: api.tunnels, refetchInterval: poll })
+}
+
+export function useRefreshTunnels() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.refreshTunnels,
+    onSuccess: (o) => qc.setQueryData(keys.tunnels, o),
+  })
 }
 
 export function useLogin() {

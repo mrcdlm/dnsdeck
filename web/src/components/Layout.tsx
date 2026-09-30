@@ -1,8 +1,10 @@
 import { History, LayoutDashboard, ListTree, LogOut, Network, Settings, type LucideIcon } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router'
 
+import { LiveProvider } from '@/components/LiveProvider'
 import { Logo } from '@/components/Logo'
 import { Button } from '@/components/ui/button'
+import { useLive } from '@/lib/live-context'
 import { useLogout } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
@@ -17,7 +19,7 @@ interface NavItem {
 const nav: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/records', label: 'Records', icon: ListTree },
-  { to: '/tunnels', label: 'Tunnels', icon: Network, soon: true },
+  { to: '/tunnels', label: 'Tunnels', icon: Network },
   { to: '/verlauf', label: 'Verlauf', icon: History, soon: true },
   { to: '/einstellungen', label: 'Einstellungen', icon: Settings, soon: true },
 ]
@@ -62,7 +64,28 @@ function NavEntry({ item, compact }: { item: NavItem; compact?: boolean }) {
   )
 }
 
+function LiveIndicator({ compact }: { compact?: boolean }) {
+  const live = useLive()
+  return (
+    <span
+      className="text-muted-foreground flex items-center gap-2 text-xs"
+      title={live ? 'Änderungen erscheinen sofort' : 'Keine Live-Verbindung – Daten werden alle 30 s nachgeladen'}
+    >
+      <span className={cn('size-2 rounded-full', live ? 'bg-success' : 'bg-muted-foreground/50')} />
+      {!compact && (live ? 'Live' : 'Offline – lädt alle 30 s')}
+    </span>
+  )
+}
+
 export function Layout() {
+  return (
+    <LiveProvider>
+      <Shell />
+    </LiveProvider>
+  )
+}
+
+function Shell() {
   const logout = useLogout()
 
   return (
@@ -75,9 +98,12 @@ export function Layout() {
             <NavEntry key={item.to} item={item} />
           ))}
         </nav>
+        <div className="mt-auto px-3 py-2">
+          <LiveIndicator />
+        </div>
         <Button
           variant="ghost"
-          className="text-muted-foreground mt-auto justify-start"
+          className="text-muted-foreground justify-start"
           onClick={() => logout.mutate()}
           disabled={logout.isPending}
         >
@@ -89,7 +115,10 @@ export function Layout() {
       {/* Mobil: Kopfzeile mit horizontal scrollbarer Navigation */}
       <header className="bg-background/80 sticky top-0 z-10 border-b backdrop-blur md:hidden">
         <div className="flex items-center justify-between px-4 py-3">
-          <Logo />
+          <div className="flex items-center gap-3">
+            <Logo />
+            <LiveIndicator compact />
+          </div>
           <Button
             variant="ghost"
             size="icon"
