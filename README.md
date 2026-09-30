@@ -1,156 +1,208 @@
+<div align="center">
+
 # dnsdeck
 
-Selbst gehosteter DDNS-Updater mit Web-Dashboard und Cloudflare-Tunnel-Monitoring –
-ein Go-Binary mit eingebettetem React-Frontend, ausgeliefert als ein Container.
+**Self-hosted dynamic DNS for Cloudflare – with a live dashboard and Cloudflare Tunnel monitoring.**
 
-**Stand:** Meilenstein 5 (alle Meilensteine umgesetzt)
-- Erkennung der öffentlichen IPv4/IPv6 per Mehrheitsentscheid mehrerer Quellen, IP-Verlauf
-- DDNS mit Cloudflare: A-/AAAA-Records verwalten (Proxy, TTL), automatischer Abgleich
-  (nur bei Abweichung vom Ist-Zustand), Update-Protokoll
-- Tunnel-Monitoring: Status, Verbindungen, Colos, Uptime-Balken 24 h / 7 Tage
-- Live-Updates per Server-Sent Events (`/api/events`)
-- Benachrichtigungen über frei konfigurierbare Webhooks (Methode, URL, Header,
-  Body-Template) – Vorlagen für ntfy, Gotify, Discord, Slack, Telegram, Home Assistant
-- Verlauf (filterbar) und Einstellungen (Intervalle, IP-Quellen, Webhooks –
-  wirken ohne Neustart)
-- Dashboard, Records- und Tunnels-Seite, Login
-- CI/CD: GitHub Actions, Multi-Arch-Image (amd64 + arm64) auf ghcr.io, Release-Tags
+[![CI](https://github.com/mrcdlm/dnsdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/mrcdlm/dnsdeck/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/mrcdlm/dnsdeck?sort=semver)](https://github.com/mrcdlm/dnsdeck/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Betrieb mit Docker Compose (Server)
+English · [Deutsch](README.de.md)
 
-Stack unter `/opt/stacks/dnsdeck`, Daten unter `/srv/dnsdeck`:
+![Dashboard](docs/screenshots/dashboard.png)
+
+</div>
+
+dnsdeck keeps your Cloudflare DNS records pointed at your current public IP address, shows
+what changed and when, and watches your Cloudflare Tunnels. It ships as a single small
+container (≈ 25 MB, amd64 and arm64) with an embedded web interface and an SQLite database.
+
+> **Note:** The web interface is currently available in German.
+
+## Features
+
+- **Reliable IP detection** – IPv4 and IPv6 from several independent sources; a new address
+  is only accepted when the majority of sources agree, so a single faulty source never
+  triggers a DNS update.
+- **Dynamic DNS for Cloudflare** – manage A and AAAA records (proxy status, TTL). Records are
+  only changed when the actual state at Cloudflare differs; missing records are created.
+- **Cloudflare Tunnel monitoring** – status, active connections, data centers, client
+  versions and 24 h / 7 day uptime per tunnel.
+- **Live dashboard** – updates instantly via Server-Sent Events, dark mode, works on mobile.
+- **History** – IP changes, DNS updates and tunnel status changes, filterable.
+- **Notifications via webhooks** – any number of webhooks with custom method, URL, headers
+  and body template. Templates included for ntfy, Gotify, Discord, Slack, Telegram and
+  Home Assistant.
+- **Secure by default** – runs as non-root on a distroless image; secrets only via
+  environment variables; single-password login with rate limiting.
+
+| Records | Tunnels | Webhooks |
+|---|---|---|
+| ![Records](docs/screenshots/records.png) | ![Tunnels](docs/screenshots/tunnels.png) | ![Webhooks](docs/screenshots/webhooks.png) |
+
+## Quick start
+
+Requirements: Docker with the Compose plugin, a Cloudflare API token
+([permissions](#cloudflare-api-token)).
 
 ```sh
-# Daten-Verzeichnis (Container läuft als UID 65532)
-sudo mkdir -p /srv/dnsdeck && sudo chown 65532:65532 /srv/dnsdeck
+mkdir dnsdeck && cd dnsdeck
+curl -fsSLO https://raw.githubusercontent.com/mrcdlm/dnsdeck/main/deploy/docker-compose.yml
+curl -fsSL  https://raw.githubusercontent.com/mrcdlm/dnsdeck/main/deploy/.env.example -o .env
+chmod 600 .env
+nano .env                                   # set APP_PASSWORD and CF_API_TOKEN
 
-# Stack
-sudo mkdir -p /opt/stacks/dnsdeck && cd /opt/stacks/dnsdeck
-sudo curl -fsSLO https://raw.githubusercontent.com/mrcdlm/dnsdeck/main/deploy/docker-compose.yml
-sudo curl -fsSL  https://raw.githubusercontent.com/mrcdlm/dnsdeck/main/deploy/.env.example -o .env
-sudo chmod 600 .env && sudo nano .env      # Werte eintragen
-
-sudo docker compose pull && sudo docker compose up -d
+mkdir -p data && sudo chown 65532:65532 data   # the container runs as UID 65532
+docker compose pull && docker compose up -d
+docker compose ps                           # "healthy" after about 30 seconds
 ```
 
-Die Version ist fest in `.env` eingetragen (`DNSDECK_VERSION=0.1.0`, ohne „v“) –
-bewusst nie `latest`. Aktualisieren: Release Notes lesen, `DNSDECK_VERSION` erhöhen,
-dann `docker compose pull && docker compose up -d`. Das Dashboard ist
-unter `http://<server>:8080` erreichbar (Healthcheck: `/healthz`). Nicht ohne HTTPS
-ins Internet stellen – z. B. über einen Cloudflare Tunnel veröffentlichen.
+Open `http://<host>:8080`, sign in with `APP_PASSWORD` and add your records under **Records**.
 
-Ist das Paket auf ghcr.io privat, den Server einmalig anmelden
-(`docker login ghcr.io`, Token mit `read:packages`) oder das Paket auf GitHub
-auf „public“ stellen – das Image enthält keine Geheimnisse.
+The data directory defaults to `./data` next to the Compose file. To use another location,
+replace `./data` in `docker-compose.yml` with an absolute path (for example `/srv/dnsdeck`)
+and give that directory to UID 65532 as well.
 
-Benötigte Cloudflare-Token-Rechte: Zone → DNS → Edit, Zone → Zone → Read,
-Account → Cloudflare Tunnel → Read.
+## Configuration
 
-| Variable        | Pflicht | Beschreibung                                            |
-|-----------------|---------|---------------------------------------------------------|
-| `APP_PASSWORD`  | ja      | Dashboard-Passwort (Klartext oder bcrypt-Hash)          |
-| `CF_API_TOKEN`  | für DDNS | Cloudflare-API-Token (Zone → DNS → Edit, Zone → Zone → Read) |
-| `CF_ACCOUNT_ID` | für Tunnels | Cloudflare-Account-ID; Token braucht zusätzlich Account → Cloudflare Tunnel → Read |
-| `WEBHOOK_*`     | nein    | Geheimnisse für Webhooks (siehe unten)                  |
-| `PORT`          | nein    | HTTP-Port, Default `8080`                               |
-| `LOG_LEVEL`     | nein    | `debug`, `info`, `warn`, `error`; Default `info`        |
-| `DATA_DIR`      | nein    | Verzeichnis für `app.db`, Default `/data`               |
+All configuration is done through environment variables in `.env`
+(template: [`deploy/.env.example`](deploy/.env.example)). Runtime settings such as
+intervals, IP sources and webhooks are managed in the web interface.
 
-## Entwicklung
+| Variable | Required | Description |
+|---|---|---|
+| `APP_PASSWORD` | yes | Password for the web interface (plain text or bcrypt hash, max. 72 bytes) |
+| `CF_API_TOKEN` | for DNS / tunnels | Cloudflare API token, see below |
+| `CF_ACCOUNT_ID` | for tunnels | Cloudflare account ID |
+| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.1.0` – pinned on purpose, no `latest` |
+| `DNSDECK_PORT` | no | Host port for the web interface (default `8080`) |
+| `TZ` | no | Time zone for log timestamps (default `UTC`) |
+| `WEBHOOK_*` | no | Secrets referenced by webhooks, see [Notifications](#notifications) |
+| `LOG_LEVEL` | no | `debug`, `info`, `warn` or `error` (default `info`) |
+| `PORT`, `DATA_DIR` | no | Port and database directory inside the container (default `8080`, `/data`) |
 
-Voraussetzungen: Go 1.27, Node 24.
+### Cloudflare API token
+
+Create a custom token under *My Profile → API Tokens* with these permissions:
+
+| Type | Permission | Access | Needed for |
+|---|---|---|---|
+| Zone | DNS | Edit | updating records |
+| Zone | Zone | Read | listing your zones |
+| Account | Cloudflare Tunnel | Read | tunnel monitoring (optional) |
+
+Restrict *Zone Resources* and *Account Resources* to what dnsdeck should manage. Do **not**
+use *Client IP Address Filtering* – the token would lock itself out after your IP changes.
+
+## How it works
+
+- **IP detection:** every interval (default 5 minutes) dnsdeck queries all enabled sources in
+  parallel. An address is accepted when it is a valid public address and a strict majority
+  (at least two sources) agrees. If only one source answers, a change is not accepted
+  (only the very first detection is).
+- **DNS updates:** for each record dnsdeck reads the current state from Cloudflare and only
+  writes when something differs. The IP is always enforced; for proxy status and TTL the value
+  at Cloudflare wins – dnsdeck only pushes them when you change them in dnsdeck. Existing
+  records are adopted with their current Cloudflare settings.
+- **Removing a record** in dnsdeck only stops managing it; the record at Cloudflare stays.
+- **Tunnels** are polled every 60 seconds by default. dnsdeck stores periods of equal status (30 days of
+  history); times without data – for example while dnsdeck was offline – are shown as unknown
+  instead of being counted as uptime. `degraded` counts as available.
+
+## Notifications
+
+Notifications are sent through webhooks, configured under **Settings**. Each webhook has its
+own method, URL, headers, body template and event selection:
+
+- IP address changed
+- DNS update failed (once per new error, not on every retry)
+- DNS update recovered
+- Tunnel status changed
+
+The body is a Go [`text/template`](https://pkg.go.dev/text/template) with the fields
+`.Type`, `.Title`, `.Message`, `.Priority`, `.Time` and `.Data.<field>`, and the functions
+`json`, `env`, `printf`, `mul`, `upper`, `lower` and `urlquery`. An empty template sends the
+event as JSON. The dialog shows a live preview and every webhook can send a test message.
+
+**Secrets never go into the configuration.** Put them into `.env` with the prefix `WEBHOOK_`
+and reference them as `${WEBHOOK_NAME}` in the URL or headers, or `{{env "WEBHOOK_NAME"}}` in
+the body. Only variables with this prefix can be referenced, placeholders inside event data
+are never expanded, and obvious plain-text secrets (such as `Authorization` headers or
+Discord/Slack/Telegram URLs) are rejected.
 
 ```sh
-# Backend (liefert ohne Frontend-Build eine Hinweisseite aus)
+# .env
+WEBHOOK_TELEGRAM_TOKEN=123456:ABC-your-bot-token
+WEBHOOK_TELEGRAM_CHAT_ID=123456789
+```
+
+## Updating
+
+dnsdeck follows [semantic versioning](https://semver.org). Read the
+[release notes](https://github.com/mrcdlm/dnsdeck/releases), set `DNSDECK_VERSION` in `.env`
+to the new version and run:
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+To roll back, set the previous version and run the same command. Database migrations are
+applied automatically on start; back up the data directory before major updates.
+
+## Security
+
+- The web interface uses plain HTTP. **Do not expose port 8080 to the internet.** Publish it
+  through a reverse proxy with TLS or a Cloudflare Tunnel, ideally protected by
+  Cloudflare Access.
+- Behind a TLS-terminating proxy the session cookie is marked `Secure` automatically
+  (`X-Forwarded-Proto: https`).
+- Secrets are read from environment variables only and are never written to the database,
+  logs or API responses.
+
+Please report vulnerabilities as described in [SECURITY.md](SECURITY.md).
+
+## Development
+
+Requirements: Go 1.27, Node.js 24.
+
+```sh
+# Backend (serves a placeholder page until the frontend is built)
 APP_PASSWORD=test DATA_DIR=./data go run ./cmd/server
 
-# Frontend mit Hot Reload (Proxy auf :8080)
+# Frontend with hot reload (proxies API requests to :8080)
 cd web && npm install && npm run dev
 ```
 
-Ohne echtes Cloudflare-Token gegen eine nachgebaute API entwickeln
-(keine echten DNS-Einträge betroffen):
+Work without a real Cloudflare account using the bundled API mock – no real DNS records
+are touched:
 
 ```sh
-go run ./cmd/cfmock -token dev -zones example.com,example.org \
-  -account dev-account -tunnels home:healthy,nas:degraded      # :8787
+go run ./cmd/cfmock -token dev -zones example.com -account dev-account -tunnels home:healthy,nas:degraded
 CF_API_TOKEN=dev CF_ACCOUNT_ID=dev-account CF_API_BASE_URL=http://localhost:8787 \
   APP_PASSWORD=test DATA_DIR=./data go run ./cmd/server
-curl localhost:8787/_records                              # Inhalt des Mocks
-curl -X POST 'localhost:8787/_fail?status=500'             # Ausfall simulieren (status=0 beendet)
-curl -X POST 'localhost:8787/_tunnel?name=home&status=down' # Tunnel-Status setzen
+
+curl -X POST 'localhost:8787/_tunnel?name=home&status=down'   # change a tunnel status
+curl -X POST 'localhost:8787/_fail?status=500'                # simulate an outage (0 = end)
 ```
 
-Hinweise zum Verhalten:
-- Records, die bei Cloudflare fehlen, werden angelegt (Kommentar „managed by dnsdeck“).
-- Bestehende Einträge werden mit ihren Cloudflare-Werten für Proxy/TTL übernommen.
-- Die IP erzwingt dnsdeck; bei Proxy/TTL hat Cloudflare das letzte Wort – dnsdeck
-  überträgt sie nur, wenn sie in dnsdeck geändert wurden.
-- Entfernen in dnsdeck beendet nur die Verwaltung – der Eintrag bei Cloudflare bleibt.
-- Im Update-Protokoll landen Anlagen, Änderungen und Fehler; gleichbleibende
-  automatische Fehler nur einmal.
-- Tunnels werden alle 60 s abgefragt. Gespeichert werden Zeitabschnitte gleichen
-  Status (30 Tage); Zeiten ohne Abfrage bleiben in der Uptime „unbekannt“.
-  `degraded` zählt als erreichbar.
-- Ein dauerhafter DNS-Fehler wird einmal gemeldet, seine Behebung ebenfalls.
-
-Lokal als Container (baut aus dem Quellcode):
-
-```sh
-cd deploy && docker compose -f docker-compose.dev.yml up -d --build
-```
-
-Checks:
+Checks (all run in CI):
 
 ```sh
 go vet ./... && go test ./...
 cd web && npm run lint && npm run build
-```
-
-Browser-Tests (Playwright; starten Mock und Server selbst, frische Datenbank):
-
-```sh
 cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
 
-`npm run build` schreibt nach `web/dist/`; von dort wird das Frontend per
-`go:embed` ins Binary übernommen.
-
-## Webhooks
-
-Unter **Einstellungen → Benachrichtigungen** beliebig viele Webhooks anlegen, jeder
-mit eigener Ereignisauswahl (IP-Wechsel, DNS-Update fehlgeschlagen / wieder OK,
-Tunnel-Statuswechsel). Vorlagen erleichtern den Start; technisch ist jeder Webhook
-gleich: Methode, URL, Header und ein Body-Template (Go `text/template`).
-
-- Im Template: `.Type .Title .Message .Priority .Time .Data.<feld>` und die
-  Funktionen `json` (für JSON-Werte, z. B. `{{json .Title}}`), `env`, `printf`,
-  `mul`, `upper`, `lower`, `urlquery`. Leeres Template = Standard-JSON des Ereignisses.
-- **Geheimnisse** (Tokens, geheime URLs) nie direkt eintragen, sondern in
-  `deploy/.env` als `WEBHOOK_…` und im Webhook als `${WEBHOOK_NAME}` (URL, Header)
-  bzw. `{{env "WEBHOOK_NAME"}}` (Body). In der Datenbank steht nur der Platzhalter.
-- Erlaubt sind nur Variablen mit Präfix `WEBHOOK_` – so kann über die Oberfläche
-  z. B. `CF_API_TOKEN` nicht an einen fremden Server geschickt werden. Platzhalter
-  werden nur im konfigurierten Text ersetzt, nie in Ereignisdaten. Offensichtlich
-  direkt eingetragene Geheimnisse (z. B. `Authorization: Bearer …`, `?token=…`,
-  Discord-/Slack-/Telegram-URLs) werden beim Speichern abgelehnt.
-- Weiterleitungen werden nur auf denselben Host verfolgt (geheime Header gehen
-  nie an fremde Hosts).
-- Die Vorschau im Dialog zeigt die fertige Anfrage mit Beispielereignis, ohne
-  Geheimnisse. „Testen“ schickt eine echte Testnachricht.
+To run a locally built container: `cd deploy && docker compose -f docker-compose.dev.yml up -d --build`.
 
 ## Releases
 
-GitHub Actions (`.github/workflows/`):
+Pushing a tag `vX.Y.Z` builds multi-arch images (`linux/amd64`, `linux/arm64`) and publishes
+them to `ghcr.io/mrcdlm/dnsdeck` as `X.Y.Z`, `X.Y` and `latest` (plus `X` from 1.0 on),
+together with a GitHub release. Every push to `main` publishes `main`. Changes are listed in
+the [changelog](CHANGELOG.md).
 
-- **CI** bei jedem Push/PR: `gofmt`, `go vet`, `go test`, Frontend-Lint und -Build,
-  Browser-Tests (Playwright).
-- **Release** bei Push auf `main`: Image `ghcr.io/mrcdlm/dnsdeck:main`.
-- **Release** bei Tag `vX.Y.Z`: Images `:X.Y.Z`, `:X.Y`, `:X`, `:latest` (amd64 + arm64)
-  und ein GitHub-Release mit automatischen Release Notes.
+## License
 
-```sh
-git tag v1.0.0 && git push origin v1.0.0
-```
-
-Die Version erscheint unter Einstellungen → System.
+[MIT](LICENSE)

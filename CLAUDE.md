@@ -1,7 +1,7 @@
 # CLAUDE.md – Projekt „dnsdeck“ (Arbeitstitel)
 
 Selbst gehosteter DDNS-Updater mit modernem Web-Dashboard und Cloudflare-Tunnel-Monitoring.
-Läuft als **ein einziger Docker-Container** auf openSUSE MicroOS (Docker Compose).
+Läuft als **ein einziger Docker-Container** auf jedem Linux-Host mit Docker Compose (Referenzsystem: openSUSE MicroOS).
 
 ## Ziele
 1. DNS-Einträge automatisch auf die aktuelle öffentliche IP aktualisieren (IPv4 + IPv6).
