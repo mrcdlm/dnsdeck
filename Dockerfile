@@ -12,17 +12,21 @@ RUN npm run build
 FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
+ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 COPY --from=web /src/web/dist ./web/dist
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/server ./cmd/server \
  && mkdir -p /out/data
 
 # --- Laufzeit ---------------------------------------------------------------
+# Keine RUN-Befehle in dieser Stufe: so baut buildx arm64 ohne QEMU-Emulation.
 FROM gcr.io/distroless/static-debian12:nonroot
+LABEL org.opencontainers.image.source="https://github.com/mrcdlm/dnsdeck" \
+      org.opencontainers.image.description="Selbst gehosteter DDNS-Updater mit Cloudflare-Tunnel-Monitoring"
 COPY --from=build /out/server /app/server
 COPY --from=build --chown=65532:65532 /out/data /data
 USER nonroot:nonroot
