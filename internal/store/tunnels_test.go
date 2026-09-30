@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -99,5 +100,43 @@ func TestTunnelSegments(t *testing.T) {
 	}
 	if n, _ := s.PurgeTunnelSegments(ctx, t0.Add(5*time.Minute)); n != 2 {
 		t.Fatalf("purge: %d", n)
+	}
+}
+
+func TestTunnelStatusChanges(t *testing.T) {
+	s, ctx := openTest(t), context.Background()
+	t0 := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	s.UpsertTunnel(ctx, Tunnel{ID: "a", Name: "home", Status: "healthy", CreatedAt: t0, LastSeenAt: t0})
+	gap := 3 * time.Minute
+	for _, o := range []struct {
+		id, status string
+		at         time.Duration
+	}{
+		{"a", "healthy", 0}, {"a", "healthy", time.Minute}, {"a", "down", 2 * time.Minute},
+		{"a", "down", 20 * time.Minute}, // Lücke, gleicher Status → kein Wechsel
+		{"a", "healthy", 21 * time.Minute},
+		{"b", "degraded", 5 * time.Minute}, // Tunnel ohne Snapshot → Name = ID
+	} {
+		if _, err := s.RecordTunnelStatus(ctx, o.id, o.status, t0.Add(o.at), gap); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	all, err := s.TunnelStatusChanges(ctx, TunnelChangeFilter{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, c := range all {
+		got = append(got, c.TunnelName+":"+c.From+">"+c.To)
+	}
+	want := "home:down>healthy b:>degraded home:healthy>down home:>healthy"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("changes = %v", got)
+	}
+
+	onlyA, _ := s.TunnelStatusChanges(ctx, TunnelChangeFilter{TunnelID: "a", Before: t0.Add(21 * time.Minute)}, 10)
+	if len(onlyA) != 2 || onlyA[0].To != "down" {
+		t.Fatalf("Filter: %+v", onlyA)
 	}
 }

@@ -52,3 +52,33 @@ func TestSchedulerFirstRunImmediate(t *testing.T) {
 	cancel()
 	s.Wait()
 }
+
+func TestReschedule(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var interval atomic.Int64
+	interval.Store(int64(time.Hour))
+	var runs atomic.Int32
+	s := New(slog.New(slog.DiscardHandler))
+	s.Add(Job{
+		Name:     "umplanen",
+		Interval: func() time.Duration { return time.Duration(interval.Load()) },
+		Run:      func(context.Context) error { runs.Add(1); return nil },
+	})
+	s.Start(ctx)
+	for runs.Load() < 1 {
+		time.Sleep(time.Millisecond)
+	}
+	// Intervall verkürzen → ohne Reschedule würde erst nach 1 h wieder laufen
+	interval.Store(int64(10 * time.Millisecond))
+	s.Reschedule()
+	deadline := time.Now().Add(2 * time.Second)
+	for runs.Load() < 3 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if runs.Load() < 3 {
+		t.Fatalf("nach Reschedule nur %d Läufe", runs.Load())
+	}
+	cancel()
+	s.Wait()
+}

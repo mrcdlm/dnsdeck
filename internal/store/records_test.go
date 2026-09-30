@@ -69,7 +69,7 @@ func TestRecordsCRUD(t *testing.T) {
 	if err := s.DeleteRecord(ctx, id); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("ErrNotFound erwartet, bekam %v", err)
 	}
-	log, err := s.ListUpdateLog(ctx, 0, 10)
+	log, err := s.ListUpdateLog(ctx, UpdateLogFilter{}, 10)
 	if err != nil || len(log) != 1 || log[0].RecordID != nil || log[0].NewIP != "203.0.113.2" {
 		t.Fatalf("Log: %v %+v", err, log)
 	}
@@ -83,10 +83,10 @@ func TestUpdateLogFilter(t *testing.T) {
 		s.InsertUpdateLog(ctx, UpdateLogEntry{RecordID: &id, RecordName: "x", RecordType: "A",
 			Trigger: TriggerScheduled, Result: ResultError, Message: "m", CreatedAt: time.Now()})
 	}
-	if l, _ := s.ListUpdateLog(ctx, a.ID, 10); len(l) != 2 {
+	if l, _ := s.ListUpdateLog(ctx, UpdateLogFilter{RecordID: a.ID}, 10); len(l) != 2 {
 		t.Fatalf("Filter a: %d", len(l))
 	}
-	if l, _ := s.ListUpdateLog(ctx, 0, 2); len(l) != 2 {
+	if l, _ := s.ListUpdateLog(ctx, UpdateLogFilter{}, 2); len(l) != 2 {
 		t.Fatalf("Limit: %d", len(l))
 	}
 }

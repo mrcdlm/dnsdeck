@@ -69,7 +69,7 @@ export interface Zone {
   name: string
 }
 
-export type UpdateResult = 'created' | 'adopted' | 'updated' | 'error'
+export type UpdateResult = 'created' | 'adopted' | 'updated' | 'recovered' | 'error'
 export type UpdateTrigger = 'scheduled' | 'manual' | 'record_saved'
 
 export interface UpdateLogEntry {
@@ -130,6 +130,76 @@ export interface TunnelOverview {
   tunnels: Tunnel[]
 }
 
+export interface TunnelChange {
+  tunnel_id: string
+  tunnel_name: string
+  from?: TunnelStatus
+  to: TunnelStatus
+  at: string
+}
+
+export type NotifyEventType = 'ip_change' | 'update_failed' | 'update_recovered' | 'tunnel_status'
+
+export interface Settings {
+  ip_check_interval_seconds: number
+  tunnel_interval_seconds: number
+  ip_sources: { name: string; enabled: boolean }[]
+  notify_events: Record<NotifyEventType, boolean>
+  limits: Record<string, number>
+}
+
+export interface ChannelStatus {
+  type: 'webhook' | 'ntfy' | 'gotify'
+  target: string
+  last_sent?: string
+  last_error?: string
+}
+
+export interface Notifications {
+  channels: ChannelStatus[]
+  config_error?: string
+}
+
+export interface TestResult {
+  type: string
+  target: string
+  ok: boolean
+  error?: string
+}
+
+export interface Info {
+  version: string
+  cf_token_set: boolean
+  cf_account_set: boolean
+  data_dir: string
+  notify_channels: number
+}
+
+export interface IPHistoryFilter {
+  family?: Family
+  before_id?: number
+}
+
+export interface UpdateLogFilter {
+  record_id?: number
+  result?: UpdateResult
+  before_id?: number
+}
+
+export interface TunnelHistoryFilter {
+  tunnel_id?: string
+  before?: string
+}
+
+function qs(params: Record<string, string | number | undefined>): string {
+  const p = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') p.set(k, String(v))
+  }
+  const s = p.toString()
+  return s ? `?${s}` : ''
+}
+
 export interface Session {
   authenticated: boolean
 }
@@ -181,4 +251,15 @@ export const api = {
   updates: (limit = 20) => request<UpdateLogEntry[]>('GET', `/api/updates?limit=${limit}`),
   tunnels: () => request<TunnelOverview>('GET', '/api/tunnels'),
   refreshTunnels: () => request<TunnelOverview>('POST', '/api/tunnels/refresh'),
+  ipHistoryPage: (f: IPHistoryFilter, limit = 50) =>
+    request<IPChange[]>('GET', `/api/ip/history${qs({ ...f, limit })}`),
+  updatesPage: (f: UpdateLogFilter, limit = 50) =>
+    request<UpdateLogEntry[]>('GET', `/api/updates${qs({ ...f, limit })}`),
+  tunnelHistoryPage: (f: TunnelHistoryFilter, limit = 50) =>
+    request<TunnelChange[]>('GET', `/api/tunnels/history${qs({ ...f, limit })}`),
+  settings: () => request<Settings>('GET', '/api/settings'),
+  saveSettings: (s: Settings) => request<Settings>('PUT', '/api/settings', s),
+  notifications: () => request<Notifications>('GET', '/api/notifications'),
+  testNotifications: () => request<TestResult[]>('POST', '/api/notifications/test'),
+  info: () => request<Info>('GET', '/api/info'),
 }

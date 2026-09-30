@@ -15,13 +15,13 @@ interface NavItem {
   soon?: boolean
 }
 
-// Nicht aktive Seiten werden in späteren Meilensteinen freigeschaltet.
+// soon: noch nicht verfügbare Seiten werden ausgegraut angezeigt.
 const nav: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/records', label: 'Records', icon: ListTree },
   { to: '/tunnels', label: 'Tunnels', icon: Network },
-  { to: '/verlauf', label: 'Verlauf', icon: History, soon: true },
-  { to: '/einstellungen', label: 'Einstellungen', icon: Settings, soon: true },
+  { to: '/verlauf', label: 'Verlauf', icon: History },
+  { to: '/einstellungen', label: 'Einstellungen', icon: Settings },
 ]
 
 function NavEntry({ item, compact }: { item: NavItem; compact?: boolean }) {

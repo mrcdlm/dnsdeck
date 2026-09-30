@@ -41,11 +41,18 @@ func (s *Store) LatestIPChange(ctx context.Context, family string) (IPChange, er
 	return c, err
 }
 
+// IPChangeFilter schränkt ListIPChanges ein; Nullwerte = kein Filter.
+type IPChangeFilter struct {
+	Family   string // "ipv4" | "ipv6"
+	BeforeID int64  // nur Einträge mit kleinerer ID (Blättern)
+}
+
 // ListIPChanges liefert die jüngsten Einträge (neueste zuerst).
-func (s *Store) ListIPChanges(ctx context.Context, limit int) ([]IPChange, error) {
+func (s *Store) ListIPChanges(ctx context.Context, f IPChangeFilter, limit int) ([]IPChange, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, family, ip, previous_ip, detected_at FROM ip_changes
-		 ORDER BY id DESC LIMIT ?`, limit)
+		 WHERE (?1 = '' OR family = ?1) AND (?2 = 0 OR id < ?2)
+		 ORDER BY id DESC LIMIT ?3`, f.Family, f.BeforeID, limit)
 	if err != nil {
 		return nil, err
 	}

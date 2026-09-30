@@ -33,6 +33,7 @@ export const updateResult: Record<UpdateResult, { label: string; variant: BadgeV
   created: { label: 'Angelegt', variant: 'success' },
   adopted: { label: 'Übernommen', variant: 'secondary' },
   updated: { label: 'Aktualisiert', variant: 'success' },
+  recovered: { label: 'Behoben', variant: 'success' },
   error: { label: 'Fehler', variant: 'destructive' },
 }
 

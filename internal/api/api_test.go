@@ -8,15 +8,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/mrcdlm/dnsdeck/internal/config"
 	"github.com/mrcdlm/dnsdeck/internal/ddns"
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
+	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
 	"github.com/mrcdlm/dnsdeck/internal/store"
@@ -51,6 +54,7 @@ type testEnv struct {
 	auth    *Auth
 	cf      *cftest.Fake
 	broker  *events.Broker
+	hooks   *atomic.Int32 // Aufrufe des Test-Webhooks
 }
 
 func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
@@ -80,12 +84,19 @@ func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
 	dd := &fakeDDNS{u: ddns.NewUpdater(st, cf, log)}
 	dd.u.Pub = broker
 	mon := tunnels.NewMonitor(cf, "acc", st, log, broker, nil)
+	settings, _ := config.NewSettingsService(context.Background(), st, []string{"cloudflare", "ipify", "icanhazip"})
+
+	hooks := &atomic.Int32{}
+	hookSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hooks.Add(1) }))
+	t.Cleanup(hookSrv.Close)
+	disp := notify.NewDispatcher([]notify.Channel{notify.Webhook{URL: hookSrv.URL + "/geheimer-pfad"}}, nil, log)
 
 	s := NewServer(Deps{Store: st, Tracker: fakeTracker{}, DDNS: dd, Zones: cf,
-		Tunnels: mon, Events: broker, Auth: auth, Log: log, Static: static})
+		Tunnels: mon, Events: broker, Settings: settings, Notify: disp,
+		Info: Info{Version: "v1.2.3", CFTokenSet: true}, Auth: auth, Log: log, Static: static})
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
-	return &testEnv{srv: srv, tracker: dd, auth: auth, cf: fake, broker: broker}
+	return &testEnv{srv: srv, tracker: dd, auth: auth, cf: fake, broker: broker, hooks: hooks}
 }
 
 func (e *testEnv) do(t *testing.T, method, path, body string, cookie *http.Cookie) *http.Response {

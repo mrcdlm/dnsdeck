@@ -10,6 +10,7 @@ const topicKeys: Record<string, readonly (readonly string[])[]> = {
   records: [keys.records],
   updates: [keys.updates],
   tunnels: [keys.tunnels],
+  settings: [keys.settings],
 }
 
 /**

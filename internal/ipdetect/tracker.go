@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
+	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -52,7 +53,9 @@ type Tracker struct {
 	store changeStore
 	log   *slog.Logger
 	pub   events.Publisher
-	now   func() time.Time
+	// Notifier erhält IP-Wechsel (optional; nicht die erste Erkennung).
+	Notifier notify.Notifier
+	now      func() time.Time
 
 	checkMu sync.Mutex // serialisiert Prüfungen (Scheduler + manueller Button)
 	mu      sync.RWMutex
@@ -174,6 +177,15 @@ func (t *Tracker) apply(ctx context.Context, f Family, addrs []netip.Addr, obs [
 			t.log.Error("IP-Wechsel konnte nicht gespeichert werden", "family", f, "err", err)
 		} else {
 			t.log.Info("IP-Wechsel erkannt", "family", f, "old", c.PreviousIP, "new", c.IP)
+			if c.PreviousIP != "" {
+				label := map[Family]string{IPv4: "IPv4", IPv6: "IPv6"}[f]
+				notify.Send(t.Notifier, notify.Event{
+					Type: notify.EventIPChange, Priority: notify.PriorityDefault, Time: now,
+					Title:   "Neue öffentliche " + label + "-Adresse",
+					Message: c.PreviousIP + " → " + c.IP,
+					Data:    map[string]string{"family": string(f), "old": c.PreviousIP, "new": c.IP},
+				})
+			}
 		}
 	}
 

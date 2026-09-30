@@ -1,6 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { api, type RecordInput } from './api'
+import {
+  api,
+  type IPHistoryFilter,
+  type RecordInput,
+  type Settings,
+  type TunnelHistoryFilter,
+  type UpdateLogFilter,
+} from './api'
 import { useLive } from './live-context'
 import { keys } from './queries-keys'
 
@@ -105,6 +112,64 @@ export function useRefreshTunnels() {
     mutationFn: api.refreshTunnels,
     onSuccess: (o) => qc.setQueryData(keys.tunnels, o),
   })
+}
+
+const PAGE = 50
+
+/** Verlauf: neueste zuerst, „Mehr laden“ über before_id / before. */
+export function useIPHistoryPages(f: IPHistoryFilter) {
+  return useInfiniteQuery({
+    queryKey: [...keys.ip, 'pages', f],
+    queryFn: ({ pageParam }) => api.ipHistoryPage({ ...f, before_id: pageParam }, PAGE),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (last) => (last.length < PAGE ? undefined : last[last.length - 1].id),
+  })
+}
+
+export function useUpdatePages(f: UpdateLogFilter) {
+  return useInfiniteQuery({
+    queryKey: [...keys.updates, 'pages', f],
+    queryFn: ({ pageParam }) => api.updatesPage({ ...f, before_id: pageParam }, PAGE),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (last) => (last.length < PAGE ? undefined : last[last.length - 1].id),
+  })
+}
+
+export function useTunnelHistoryPages(f: TunnelHistoryFilter) {
+  return useInfiniteQuery({
+    queryKey: [...keys.tunnels, 'history', f],
+    queryFn: ({ pageParam }) => api.tunnelHistoryPage({ ...f, before: pageParam }, PAGE),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.length < PAGE ? undefined : last[last.length - 1].at),
+  })
+}
+
+export function useSettings() {
+  return useQuery({ queryKey: keys.settings, queryFn: api.settings })
+}
+
+export function useSaveSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (s: Settings) => api.saveSettings(s),
+    onSuccess: (s) => qc.setQueryData(keys.settings, s),
+  })
+}
+
+export function useNotifications() {
+  return useQuery({ queryKey: keys.notifications, queryFn: api.notifications })
+}
+
+export function useTestNotifications() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.testNotifications,
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.notifications }),
+  })
+}
+
+export function useInfo() {
+  return useQuery({ queryKey: keys.info, queryFn: api.info, staleTime: Infinity })
 }
 
 export function useLogin() {
