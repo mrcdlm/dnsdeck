@@ -204,3 +204,58 @@ func (s *Store) PurgeTunnelSegments(ctx context.Context, before time.Time) (int6
 	}
 	return res.RowsAffected()
 }
+
+// TunnelChange ist ein Statuswechsel, abgeleitet aus den Abschnitten.
+type TunnelChange struct {
+	TunnelID   string    `json:"tunnel_id"`
+	TunnelName string    `json:"tunnel_name"`
+	From       string    `json:"from,omitempty"` // leer = erstmals beobachtet
+	To         string    `json:"to"`
+	At         time.Time `json:"at"`
+}
+
+// TunnelChangeFilter schränkt TunnelStatusChanges ein; Nullwerte = kein Filter.
+type TunnelChangeFilter struct {
+	TunnelID string
+	Before   time.Time // nur Wechsel vor diesem Zeitpunkt (Blättern)
+}
+
+// TunnelStatusChanges liefert Statuswechsel (neueste zuerst). Aufeinander
+// folgende Abschnitte gleichen Status (z. B. nach einer Lücke) zählen nicht
+// als Wechsel.
+func (s *Store) TunnelStatusChanges(ctx context.Context, f TunnelChangeFilter, limit int) ([]TunnelChange, error) {
+	before := ""
+	if !f.Before.IsZero() {
+		before = formatTime(f.Before)
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT c.tunnel_id, COALESCE(t.name, c.tunnel_id), COALESCE(c.prev, ''), c.status, c.started_at
+		 FROM (
+			SELECT tunnel_id, status, started_at,
+				LAG(status) OVER (PARTITION BY tunnel_id ORDER BY started_at, id) AS prev
+			FROM tunnel_status_segments
+		 ) c
+		 LEFT JOIN tunnels t ON t.id = c.tunnel_id
+		 WHERE (c.prev IS NULL OR c.prev <> c.status)
+			AND (?1 = '' OR c.tunnel_id = ?1) AND (?2 = '' OR c.started_at < ?2)
+		 ORDER BY c.started_at DESC LIMIT ?3`, f.TunnelID, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []TunnelChange{}
+	for rows.Next() {
+		var (
+			c  TunnelChange
+			at string
+		)
+		if err := rows.Scan(&c.TunnelID, &c.TunnelName, &c.From, &c.To, &at); err != nil {
+			return nil, err
+		}
+		if c.At, err = parseTime(at); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}

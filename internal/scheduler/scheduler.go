@@ -20,6 +20,9 @@ type Scheduler struct {
 	log  *slog.Logger
 	jobs []Job
 	wg   sync.WaitGroup
+
+	mu      sync.Mutex
+	resched []chan struct{}
 }
 
 func New(log *slog.Logger) *Scheduler { return &Scheduler{log: log} }
@@ -30,13 +33,31 @@ func (s *Scheduler) Add(j Job) { s.jobs = append(s.jobs, j) }
 // Die Jobs enden, wenn ctx abgebrochen wird; Wait wartet darauf.
 func (s *Scheduler) Start(ctx context.Context) {
 	for _, j := range s.jobs {
-		s.wg.Go(func() { s.loop(ctx, j) })
+		ch := make(chan struct{}, 1)
+		s.mu.Lock()
+		s.resched = append(s.resched, ch)
+		s.mu.Unlock()
+		s.wg.Go(func() { s.loop(ctx, j, ch) })
+	}
+}
+
+// Reschedule lässt alle Jobs ihr Intervall neu berechnen (z. B. nach einer
+// Änderung der Einstellungen). Ist das neue Intervall seit dem letzten Lauf
+// bereits verstrichen, läuft der Job sofort.
+func (s *Scheduler) Reschedule() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, ch := range s.resched {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
 	}
 }
 
 func (s *Scheduler) Wait() { s.wg.Wait() }
 
-func (s *Scheduler) loop(ctx context.Context, j Job) {
+func (s *Scheduler) loop(ctx context.Context, j Job, resched <-chan struct{}) {
 	for {
 		start := time.Now()
 		if err := j.Run(ctx); err != nil && ctx.Err() == nil {
@@ -46,11 +67,18 @@ func (s *Scheduler) loop(ctx context.Context, j Job) {
 		}
 
 		t := time.NewTimer(j.Interval())
-		select {
-		case <-ctx.Done():
-			t.Stop()
-			return
-		case <-t.C:
+	wait:
+		for {
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+				break wait
+			case <-resched:
+				t.Stop()
+				t = time.NewTimer(max(0, j.Interval()-time.Since(start)))
+			}
 		}
 	}
 }

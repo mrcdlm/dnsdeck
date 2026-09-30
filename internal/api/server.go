@@ -4,10 +4,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,7 +21,8 @@ import (
 type dataStore interface {
 	sessionStore
 	Ping(ctx context.Context) error
-	ListIPChanges(ctx context.Context, limit int) ([]store.IPChange, error)
+	ListIPChanges(ctx context.Context, f store.IPChangeFilter, limit int) ([]store.IPChange, error)
+	TunnelStatusChanges(ctx context.Context, f store.TunnelChangeFilter, limit int) ([]store.TunnelChange, error)
 	recordStore
 }
 
@@ -43,26 +44,38 @@ type Deps struct {
 	Zones   providers.ZoneLister // nil = Cloudflare nicht konfiguriert
 	Tunnels tunnelService        // nil = kein Tunnel-Monitoring
 	Events  eventSource          // nil = keine Live-Updates
-	Auth    *Auth
-	Log     *slog.Logger
-	Static  fs.FS
+	// Settings: Laufzeit-Einstellungen (nil = nicht änderbar)
+	Settings settingsService
+	// Notify: Benachrichtigungskanäle (nil = keine)
+	Notify notifyService
+	// NotifyConfigError: Fehler beim Lesen der NOTIFY_*-Variablen (ohne Werte)
+	NotifyConfigError string
+	Info              Info
+	Auth              *Auth
+	Log               *slog.Logger
+	Static            fs.FS
 }
 
 type Server struct {
-	store   dataStore
-	tracker ipTracker
-	ddns    ddnsService
-	zones   providers.ZoneLister
-	tunnels tunnelService
-	events  eventSource
-	auth    *Auth
-	log     *slog.Logger
-	static  fs.FS
+	store             dataStore
+	tracker           ipTracker
+	ddns              ddnsService
+	zones             providers.ZoneLister
+	tunnels           tunnelService
+	events            eventSource
+	settings          settingsService
+	notify            notifyService
+	notifyConfigError string
+	info              Info
+	auth              *Auth
+	log               *slog.Logger
+	static            fs.FS
 }
 
 func NewServer(d Deps) *Server {
 	return &Server{store: d.Store, tracker: d.Tracker, ddns: d.DDNS, zones: d.Zones,
-		tunnels: d.Tunnels, events: d.Events, auth: d.Auth, log: d.Log, static: d.Static}
+		tunnels: d.Tunnels, events: d.Events, settings: d.Settings, notify: d.Notify,
+		notifyConfigError: d.NotifyConfigError, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -95,7 +108,14 @@ func (s *Server) Routes() http.Handler {
 
 			r.Get("/tunnels", s.handleTunnels)
 			r.Post("/tunnels/refresh", s.handleTunnelsRefresh)
+			r.Get("/tunnels/history", s.handleTunnelHistory)
 			r.Get("/events", s.handleEvents)
+
+			r.Get("/settings", s.handleGetSettings)
+			r.Put("/settings", s.handlePutSettings)
+			r.Get("/notifications", s.handleNotifications)
+			r.Post("/notifications/test", s.handleNotificationTest)
+			r.Get("/info", s.handleInfo)
 		})
 
 		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
@@ -168,6 +188,9 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	ok, err := s.auth.valid(r)
+	if errors.Is(err, context.Canceled) {
+		return // Browser hat die Anfrage abgebrochen
+	}
 	if err != nil {
 		s.log.Error("Session prüfen fehlgeschlagen", "err", err)
 		writeError(w, http.StatusInternalServerError, "interner Fehler")
@@ -179,6 +202,9 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ok, err := s.auth.valid(r)
+		if errors.Is(err, context.Canceled) {
+			return // Browser hat die Anfrage abgebrochen (z. B. Seitenwechsel)
+		}
 		if err != nil {
 			s.log.Error("Session prüfen fehlgeschlagen", "err", err)
 			writeError(w, http.StatusInternalServerError, "interner Fehler")
@@ -194,25 +220,6 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 
 func (s *Server) handleIP(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.tracker.State())
-}
-
-func (s *Server) handleIPHistory(w http.ResponseWriter, r *http.Request) {
-	limit := 50
-	if v := r.URL.Query().Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 {
-			writeError(w, http.StatusBadRequest, "limit ungültig")
-			return
-		}
-		limit = min(n, 500)
-	}
-	list, err := s.store.ListIPChanges(r.Context(), limit)
-	if err != nil {
-		s.log.Error("IP-Verlauf lesen fehlgeschlagen", "err", err)
-		writeError(w, http.StatusInternalServerError, "interner Fehler")
-		return
-	}
-	writeJSON(w, http.StatusOK, list)
 }
 
 func (s *Server) handleIPRefresh(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/ddns"
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
+	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/scheduler"
@@ -24,6 +26,9 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/tunnels"
 	"github.com/mrcdlm/dnsdeck/web"
 )
+
+// version wird beim Release-Build per -ldflags "-X main.version=…" gesetzt.
+var version = "dev"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
@@ -58,7 +63,7 @@ func run() error {
 	}
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
 	slog.SetDefault(log)
-	log.Info("dnsdeck startet", "config", cfg)
+	log.Info("dnsdeck startet", "version", version, "config", cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -72,15 +77,28 @@ func run() error {
 	}
 	defer st.Close()
 
-	settings, warnings := config.LoadSettings(ctx, st)
+	settings, warnings := config.NewSettingsService(ctx, st, ipdetect.SourceNames())
 	for _, w := range warnings {
 		log.Warn("Einstellung", "warning", w)
 	}
+	newDetector := func(names []string) *ipdetect.Detector {
+		return ipdetect.NewDetector(ipdetect.SelectSources(ipdetect.DefaultSources(), names))
+	}
 
-	sources := ipdetect.SelectSources(ipdetect.DefaultSources(), settings.IPSources)
+	// Benachrichtigungen: Kanäle nur aus Env-Variablen (enthalten Geheimnisse).
+	channels, notifyErr := notify.ChannelsFromEnv(os.Getenv)
+	notifyConfigError := ""
+	if notifyErr != nil {
+		notifyConfigError = notifyErr.Error()
+		log.Warn("Benachrichtigungen unvollständig konfiguriert", "err", notifyErr)
+	}
+	dispatcher := notify.NewDispatcher(channels, func(t string) bool { return settings.Get().NotifyEnabled(t) }, log)
+	log.Info("Benachrichtigungskanäle", "count", len(channels))
+
 	broker := events.NewBroker()
-	tracker := ipdetect.NewTracker(ipdetect.NewDetector(sources), st, log)
+	tracker := ipdetect.NewTracker(newDetector(settings.Get().IPSources), st, log)
 	tracker.SetPublisher(broker)
+	tracker.Notifier = dispatcher
 	if err := tracker.Load(ctx); err != nil {
 		return fmt.Errorf("IP-Zustand laden: %w", err)
 	}
@@ -99,6 +117,7 @@ func run() error {
 	}
 	updater := ddns.NewUpdater(st, provider, log)
 	updater.Pub = broker
+	updater.Notifier = dispatcher
 	svc := &ddns.Service{Tracker: tracker, Updater: updater}
 
 	var tunnelClient interface {
@@ -108,7 +127,8 @@ func run() error {
 		tunnelClient = cf
 	}
 	monitor := tunnels.NewMonitor(tunnelClient, cfg.CFAccountID, st, log, broker,
-		func() time.Duration { return settings.TunnelInterval })
+		func() time.Duration { return settings.Get().TunnelInterval })
+	monitor.OnChange = func(c tunnels.Change) { dispatcher.Notify(tunnelEvent(c)) }
 	if cf != nil && cfg.CFAccountID == "" {
 		log.Warn("CF_ACCOUNT_ID nicht gesetzt – Tunnel-Monitoring ist deaktiviert")
 	}
@@ -122,7 +142,7 @@ func run() error {
 	sched := scheduler.New(log)
 	sched.Add(scheduler.Job{
 		Name:     "ddns",
-		Interval: func() time.Duration { return settings.IPCheckInterval },
+		Interval: func() time.Duration { return settings.Get().IPCheckInterval },
 		Run: func(ctx context.Context) error {
 			_, err := svc.RunCycle(ctx, store.TriggerScheduled)
 			return err
@@ -131,7 +151,7 @@ func run() error {
 	if monitor.Configured() {
 		sched.Add(scheduler.Job{
 			Name:     "tunnels",
-			Interval: func() time.Duration { return settings.TunnelInterval },
+			Interval: func() time.Duration { return settings.Get().TunnelInterval },
 			Run:      monitor.Poll,
 		})
 	}
@@ -144,11 +164,22 @@ func run() error {
 		},
 	})
 
+	// Geänderte Einstellungen ohne Neustart anwenden.
+	settings.OnChange(func(old, cur config.Settings) {
+		if !slices.Equal(old.IPSources, cur.IPSources) {
+			tracker.SetObserver(newDetector(cur.IPSources))
+		}
+		sched.Reschedule()
+	})
+
 	srv := &http.Server{
 		Addr: fmt.Sprintf(":%d", cfg.Port),
 		Handler: api.NewServer(api.Deps{
 			Store: st, Tracker: tracker, DDNS: svc, Zones: zones,
-			Tunnels: monitor, Events: broker,
+			Tunnels: monitor, Events: broker, Settings: settings,
+			Notify: dispatcher, NotifyConfigError: notifyConfigError,
+			Info: api.Info{Version: version, CFTokenSet: cfg.CFAPIToken != "", CFAccountSet: cfg.CFAccountID != "",
+				DataDir: cfg.DataDir, NotifyChannel: len(channels)},
 			Auth: auth, Log: log, Static: web.Dist(),
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -163,6 +194,7 @@ func run() error {
 		}
 	}()
 	sched.Start(ctx)
+	dispatcher.Start(ctx)
 
 	select {
 	case <-ctx.Done():
@@ -181,7 +213,26 @@ func run() error {
 		log.Error("Shutdown", "err", err)
 	}
 	sched.Wait()
+	dispatcher.Wait()
 	return nil
+}
+
+var tunnelLabel = map[string]string{
+	tunnels.StatusHealthy: "verbunden", tunnels.StatusDegraded: "eingeschränkt",
+	tunnels.StatusDown: "getrennt", tunnels.StatusInactive: "inaktiv",
+}
+
+func tunnelEvent(c tunnels.Change) notify.Event {
+	prio := notify.PriorityDefault
+	if c.To == tunnels.StatusDown || c.To == tunnels.StatusInactive {
+		prio = notify.PriorityHigh
+	}
+	return notify.Event{
+		Type: notify.EventTunnelStatus, Priority: prio, Time: c.At,
+		Title:   fmt.Sprintf("Tunnel %s: %s", c.Name, tunnelLabel[c.To]),
+		Message: fmt.Sprintf("Status %s → %s", tunnelLabel[c.From], tunnelLabel[c.To]),
+		Data:    map[string]string{"tunnel": c.Name, "tunnel_id": c.TunnelID, "from": c.From, "to": c.To},
+	}
 }
 
 // ensureWritable liefert eine verständliche Meldung, wenn das Datenverzeichnis

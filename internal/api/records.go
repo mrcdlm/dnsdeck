@@ -23,7 +23,7 @@ type recordStore interface {
 	CreateRecord(ctx context.Context, r store.Record) (store.Record, error)
 	UpdateRecordSettings(ctx context.Context, r store.Record) (store.Record, error)
 	DeleteRecord(ctx context.Context, id int64) error
-	ListUpdateLog(ctx context.Context, recordID int64, limit int) ([]store.UpdateLogEntry, error)
+	ListUpdateLog(ctx context.Context, f store.UpdateLogFilter, limit int) ([]store.UpdateLogEntry, error)
 }
 
 // Abgleich nach dem Speichern bzw. manuell: großzügiges Zeitlimit, und auch
@@ -259,23 +259,6 @@ func (s *Server) handleSyncAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.handleListRecords(w, r)
-}
-
-func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
-	limit, ok := queryInt(w, r, "limit", 50, 500)
-	if !ok {
-		return
-	}
-	recID, ok := queryInt(w, r, "record_id", 0, 1<<62)
-	if !ok {
-		return
-	}
-	entries, err := s.store.ListUpdateLog(r.Context(), int64(recID), limit)
-	if err != nil {
-		s.internalError(w, "Update-Log lesen", err)
-		return
-	}
-	writeJSON(w, http.StatusOK, entries)
 }
 
 func recordID(w http.ResponseWriter, r *http.Request) (int64, bool) {

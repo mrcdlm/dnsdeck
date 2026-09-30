@@ -13,6 +13,7 @@ import (
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
+	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
@@ -49,6 +50,8 @@ type Updater struct {
 	mu       sync.Mutex
 	// Pub wird nach jedem Abgleich informiert (optional).
 	Pub events.Publisher
+	// Notifier erhält Fehler und Erholungen (optional).
+	Notifier notify.Notifier
 }
 
 func NewUpdater(st recordStore, p providers.Provider, log *slog.Logger) *Updater {
@@ -123,6 +126,7 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 		}
 		u.log.Info("DNS-Eintrag angelegt", "record", r.Name, "type", r.Type, "ip", ip)
 		u.writeLog(ctx, r, trigger, store.ResultCreated, "", ip, "bei Cloudflare angelegt", now)
+		u.recovered(ctx, r, trigger, ip, now)
 		return u.store.SetRecordSyncState(ctx, r.ID, synced(created, now, true))
 	}
 	if err != nil {
@@ -150,6 +154,7 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 			u.log.Info("Proxy/TTL von Cloudflare übernommen", "record", r.Name, "type", r.Type,
 				"proxied", cur.Proxied, "ttl", cur.TTL)
 		}
+		u.recovered(ctx, r, trigger, cur.Content, now)
 		return u.store.SetRecordSyncState(ctx, r.ID, synced(cur, now, false))
 	}
 
@@ -163,7 +168,28 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 	u.log.Info("DNS-Eintrag aktualisiert", "record", r.Name, "type", r.Type,
 		"old", cur.Content, "new", ip, "changes", strings.Join(changes, "; "))
 	u.writeLog(ctx, r, trigger, store.ResultUpdated, cur.Content, ip, strings.Join(changes, "; "), now)
+	u.recovered(ctx, r, trigger, ip, now)
 	return u.store.SetRecordSyncState(ctx, r.ID, synced(upd, now, true))
+}
+
+// recovered protokolliert und meldet, dass ein zuvor fehlerhafter Record
+// wieder erfolgreich abgeglichen wurde.
+func (u *Updater) recovered(ctx context.Context, r store.Record, trigger, ip string, now time.Time) {
+	if r.Status != store.RecordError {
+		return
+	}
+	msg := "Abgleich wieder erfolgreich"
+	if r.Message != "" {
+		msg += " (vorher: " + r.Message + ")"
+	}
+	u.log.Info("DNS-Abgleich wieder erfolgreich", "record", r.Name, "type", r.Type)
+	u.writeLog(ctx, r, trigger, store.ResultRecovered, ip, ip, msg, now)
+	notify.Send(u.Notifier, notify.Event{
+		Type: notify.EventUpdateRecovered, Priority: notify.PriorityDefault, Time: now,
+		Title:   fmt.Sprintf("DNS-Update wieder OK: %s (%s)", r.Name, r.Type),
+		Message: fmt.Sprintf("%s zeigt auf %s.", r.Name, ip),
+		Data:    map[string]string{"record": r.Name, "type": r.Type, "ip": ip},
+	})
 }
 
 // synced beschreibt einen erfolgreichen Abgleich mit dem Stand beim Anbieter.
@@ -217,6 +243,14 @@ func (u *Updater) fail(ctx context.Context, r store.Record, ip, trigger string, 
 	if !repeated || trigger != store.TriggerScheduled {
 		u.log.Warn("DNS-Update fehlgeschlagen", "record", r.Name, "type", r.Type, "err", msg)
 		u.writeLog(ctx, r, trigger, store.ResultError, r.CurrentIP, ip, msg, now)
+	}
+	if !repeated {
+		notify.Send(u.Notifier, notify.Event{
+			Type: notify.EventUpdateFailed, Priority: notify.PriorityHigh, Time: now,
+			Title:   fmt.Sprintf("DNS-Update fehlgeschlagen: %s (%s)", r.Name, r.Type),
+			Message: fmt.Sprintf("Soll-IP %s: %s", ip, msg),
+			Data:    map[string]string{"record": r.Name, "type": r.Type, "ip": ip, "error": msg},
+		})
 	}
 	return u.store.SetRecordSyncState(ctx, r.ID, store.RecordSyncState{
 		Status: store.RecordError, Message: msg, CheckedAt: now})

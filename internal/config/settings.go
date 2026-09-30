@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,6 +16,7 @@ const (
 	KeyIPCheckInterval = "ip_check_interval"
 	KeyIPSources       = "ip_sources"
 	KeyTunnelInterval  = "tunnel_poll_interval"
+	KeyNotifyEvents    = "notify_events"
 )
 
 const (
@@ -33,6 +35,15 @@ type Settings struct {
 	IPSources []string
 	// TunnelInterval: Abfrageintervall für Cloudflare Tunnels.
 	TunnelInterval time.Duration
+	// NotifyEvents: abgeschaltete Ereignistypen stehen hier mit false;
+	// fehlende Typen gelten als eingeschaltet.
+	NotifyEvents map[string]bool
+}
+
+// NotifyEnabled meldet, ob ein Ereignistyp benachrichtigt werden soll.
+func (s Settings) NotifyEnabled(eventType string) bool {
+	on, ok := s.NotifyEvents[eventType]
+	return !ok || on
 }
 
 type settingsStore interface {
@@ -62,6 +73,15 @@ func LoadSettings(ctx context.Context, s settingsStore) (Settings, []error) {
 			warnings = append(warnings, fmt.Errorf("%s ungültig (%q), nutze Default", KeyTunnelInterval, v))
 		} else {
 			out.TunnelInterval = d
+		}
+	} else if !errors.Is(err, store.ErrNotFound) {
+		warnings = append(warnings, err)
+	}
+
+	if v, err := s.GetSetting(ctx, KeyNotifyEvents); err == nil {
+		if jerr := json.Unmarshal([]byte(v), &out.NotifyEvents); jerr != nil {
+			warnings = append(warnings, fmt.Errorf("%s ungültig, nutze Default", KeyNotifyEvents))
+			out.NotifyEvents = nil
 		}
 	} else if !errors.Is(err, store.ErrNotFound) {
 		warnings = append(warnings, err)

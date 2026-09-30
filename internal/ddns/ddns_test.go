@@ -4,8 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
 	"github.com/mrcdlm/dnsdeck/internal/store"
@@ -52,7 +54,7 @@ func (e *env) get(t *testing.T, id int64) store.Record {
 
 func (e *env) logs(t *testing.T) []store.UpdateLogEntry {
 	t.Helper()
-	l, err := e.st.ListUpdateLog(context.Background(), 0, 100)
+	l, err := e.st.ListUpdateLog(context.Background(), store.UpdateLogFilter{}, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,5 +259,47 @@ func TestDisabledAndNotConfigured(t *testing.T) {
 	got, err := u.SyncRecord(ctx, r.ID, ips1, store.TriggerManual)
 	if err != nil || got.Status != store.RecordError || got.Message == "" {
 		t.Fatalf("ohne Provider: %v %+v", err, got)
+	}
+}
+
+type recNotifier struct{ events []notify.Event }
+
+func (r *recNotifier) Notify(ev notify.Event) { r.events = append(r.events, ev) }
+
+func TestRecoveryIsLoggedAndNotified(t *testing.T) {
+	e, ctx := setup(t), context.Background()
+	n := &recNotifier{}
+	e.u.Notifier = n
+	r := e.add(t, "home.example.com", "A", 1, false)
+
+	e.fake.Fail(500)
+	for range 3 { // wiederholter automatischer Fehler → nur eine Meldung
+		e.u.SyncAll(ctx, ips1, store.TriggerScheduled)
+	}
+	e.fake.Fail(0)
+	e.u.SyncAll(ctx, ips1, store.TriggerScheduled)
+	e.u.SyncAll(ctx, ips1, store.TriggerScheduled) // danach normal: keine weitere Meldung
+
+	types := []string{}
+	for _, ev := range n.events {
+		types = append(types, ev.Type)
+	}
+	if strings.Join(types, ",") != "update_failed,update_recovered" {
+		t.Fatalf("Meldungen: %v", types)
+	}
+	l := e.logs(t)
+	results := []string{}
+	for _, x := range l {
+		results = append(results, x.Result)
+	}
+	// neueste zuerst: angelegt + behoben (gleicher Lauf), Fehler
+	if strings.Join(results, ",") != "recovered,created,error" {
+		t.Fatalf("Log: %v", results)
+	}
+	if !strings.HasPrefix(l[0].Message, "Abgleich wieder erfolgreich (vorher: Cloudflare-API: HTTP 500") {
+		t.Fatalf("Meldung: %q", l[0].Message)
+	}
+	if got := e.get(t, r.ID); got.Status != store.RecordOK {
+		t.Fatalf("Status: %+v", got)
 	}
 }

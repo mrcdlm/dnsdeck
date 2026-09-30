@@ -8,10 +8,11 @@ import (
 
 // Ergebnisse im Update-Log.
 const (
-	ResultCreated = "created"
-	ResultAdopted = "adopted" // bestehenden Eintrag unverändert übernommen
-	ResultUpdated = "updated"
-	ResultError   = "error"
+	ResultCreated   = "created"
+	ResultAdopted   = "adopted" // bestehenden Eintrag unverändert übernommen
+	ResultUpdated   = "updated"
+	ResultRecovered = "recovered" // nach Fehler wieder erfolgreich
+	ResultError     = "error"
 )
 
 // Auslöser eines Abgleichs.
@@ -46,19 +47,20 @@ func (s *Store) InsertUpdateLog(ctx context.Context, e UpdateLogEntry) (int64, e
 	return res.LastInsertId()
 }
 
-// ListUpdateLog liefert die jüngsten Einträge; recordID > 0 filtert auf einen Record.
-func (s *Store) ListUpdateLog(ctx context.Context, recordID int64, limit int) ([]UpdateLogEntry, error) {
-	q := `SELECT id, record_id, record_name, record_type, trigger, result, old_ip, new_ip,
-		message, created_at FROM update_log`
-	args := []any{}
-	if recordID > 0 {
-		q += ` WHERE record_id = ?`
-		args = append(args, recordID)
-	}
-	q += ` ORDER BY id DESC LIMIT ?`
-	args = append(args, limit)
+// UpdateLogFilter schränkt ListUpdateLog ein; Nullwerte = kein Filter.
+type UpdateLogFilter struct {
+	RecordID int64
+	Result   string // created | adopted | updated | recovered | error
+	BeforeID int64  // nur Einträge mit kleinerer ID (Blättern)
+}
 
-	rows, err := s.db.QueryContext(ctx, q, args...)
+// ListUpdateLog liefert die jüngsten Einträge (neueste zuerst).
+func (s *Store) ListUpdateLog(ctx context.Context, f UpdateLogFilter, limit int) ([]UpdateLogEntry, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, record_id, record_name, record_type, trigger, result, old_ip, new_ip,
+			message, created_at FROM update_log
+		 WHERE (?1 = 0 OR record_id = ?1) AND (?2 = '' OR result = ?2) AND (?3 = 0 OR id < ?3)
+		 ORDER BY id DESC LIMIT ?4`, f.RecordID, f.Result, f.BeforeID, limit)
 	if err != nil {
 		return nil, err
 	}

@@ -3,12 +3,16 @@
 Selbst gehosteter DDNS-Updater mit Web-Dashboard und Cloudflare-Tunnel-Monitoring –
 ein Go-Binary mit eingebettetem React-Frontend, ausgeliefert als ein Container.
 
-**Stand:** Meilenstein 3
+**Stand:** Meilenstein 4
 - Erkennung der öffentlichen IPv4/IPv6 per Mehrheitsentscheid mehrerer Quellen, IP-Verlauf
 - DDNS mit Cloudflare: A-/AAAA-Records verwalten (Proxy, TTL), automatischer Abgleich
   (nur bei Abweichung vom Ist-Zustand), Update-Protokoll
 - Tunnel-Monitoring: Status, Verbindungen, Colos, Uptime-Balken 24 h / 7 Tage
 - Live-Updates per Server-Sent Events (`/api/events`)
+- Benachrichtigungen per ntfy, Gotify oder Webhook (IP-Wechsel, DNS-Fehler und
+  -Erholung, Tunnel-Statuswechsel)
+- Verlauf (filterbar) und Einstellungen (Intervalle, IP-Quellen, Ereignisse –
+  wirken ohne Neustart)
 - Dashboard, Records- und Tunnels-Seite, Login
 
 ## Betrieb mit Docker Compose
@@ -28,6 +32,9 @@ Danach ist das Dashboard unter <http://localhost:8080> erreichbar
 | `APP_PASSWORD`  | ja      | Dashboard-Passwort (Klartext oder bcrypt-Hash)          |
 | `CF_API_TOKEN`  | für DDNS | Cloudflare-API-Token (Zone → DNS → Edit, Zone → Zone → Read) |
 | `CF_ACCOUNT_ID` | für Tunnels | Cloudflare-Account-ID; Token braucht zusätzlich Account → Cloudflare Tunnel → Read |
+| `NOTIFY_NTFY_URL` / `NOTIFY_NTFY_TOKEN` | nein | ntfy-Topic-URL, optional Access-Token |
+| `NOTIFY_GOTIFY_URL` / `NOTIFY_GOTIFY_TOKEN` | nein | Gotify-Server und App-Token |
+| `NOTIFY_WEBHOOK_URL` | nein | Webhook, erhält das Ereignis als JSON per POST |
 | `PORT`          | nein    | HTTP-Port, Default `8080`                               |
 | `LOG_LEVEL`     | nein    | `debug`, `info`, `warn`, `error`; Default `info`        |
 | `DATA_DIR`      | nein    | Verzeichnis für `app.db`, Default `/data`               |
@@ -68,6 +75,9 @@ Hinweise zum Verhalten:
 - Tunnels werden alle 60 s abgefragt. Gespeichert werden Zeitabschnitte gleichen
   Status (30 Tage); Zeiten ohne Abfrage bleiben in der Uptime „unbekannt“.
   `degraded` zählt als erreichbar.
+- Benachrichtigungs-URLs und -Tokens gelten als Geheimnisse: nur per Env-Variable,
+  in der Oberfläche nur maskiert (Schema und Host). Ein dauerhafter DNS-Fehler wird
+  einmal gemeldet, seine Behebung ebenfalls.
 
 Checks:
 

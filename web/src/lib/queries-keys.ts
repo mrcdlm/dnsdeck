@@ -6,4 +6,7 @@ export const keys = {
   records: ['records'] as const,
   updates: ['updates'] as const,
   tunnels: ['tunnels'] as const,
+  settings: ['settings'] as const,
+  notifications: ['notifications'] as const,
+  info: ['info'] as const,
 }

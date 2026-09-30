@@ -64,12 +64,20 @@ func TestIPChanges(t *testing.T) {
 		t.Fatalf("unerwartet: %+v", c)
 	}
 
-	list, err := s.ListIPChanges(ctx, 2)
+	list, err := s.ListIPChanges(ctx, IPChangeFilter{}, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(list) != 2 || list[0].IP != "203.0.113.2" || list[1].Family != "ipv6" {
 		t.Fatalf("unerwartet: %+v", list)
+	}
+	v4, _ := s.ListIPChanges(ctx, IPChangeFilter{Family: "ipv4"}, 10)
+	if len(v4) != 2 {
+		t.Fatalf("Filter Familie: %+v", v4)
+	}
+	older, _ := s.ListIPChanges(ctx, IPChangeFilter{BeforeID: list[0].ID}, 10)
+	if len(older) != 2 || older[0].ID >= list[0].ID {
+		t.Fatalf("Blättern: %+v", older)
 	}
 }
 
