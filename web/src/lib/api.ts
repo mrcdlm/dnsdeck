@@ -144,25 +144,40 @@ export interface Settings {
   ip_check_interval_seconds: number
   tunnel_interval_seconds: number
   ip_sources: { name: string; enabled: boolean }[]
-  notify_events: Record<NotifyEventType, boolean>
   limits: Record<string, number>
 }
 
-export interface ChannelStatus {
-  type: 'webhook' | 'ntfy' | 'gotify'
-  target: string
-  last_sent?: string
-  last_error?: string
+export type WebhookMethod = 'POST' | 'PUT' | 'PATCH' | 'GET'
+
+export interface WebhookInput {
+  name: string
+  enabled: boolean
+  method: WebhookMethod
+  url: string
+  headers: { name: string; value: string }[]
+  content_type: string
+  body_template: string
+  events: NotifyEventType[]
 }
 
-export interface Notifications {
-  channels: ChannelStatus[]
-  config_error?: string
+export interface Webhook extends WebhookInput {
+  id: number
+  last_sent_at?: string
+  last_error?: string
+  created_at: string
+  updated_at: string
+  /** verwendete, aber nicht gesetzte Env-Variablen (nur Namen) */
+  missing_env: string[]
+}
+
+export interface WebhookPreview {
+  method: string
+  url: string
+  headers: Record<string, string[]>
+  body: string
 }
 
 export interface TestResult {
-  type: string
-  target: string
   ok: boolean
   error?: string
 }
@@ -172,7 +187,6 @@ export interface Info {
   cf_token_set: boolean
   cf_account_set: boolean
   data_dir: string
-  notify_channels: number
 }
 
 export interface IPHistoryFilter {
@@ -259,7 +273,12 @@ export const api = {
     request<TunnelChange[]>('GET', `/api/tunnels/history${qs({ ...f, limit })}`),
   settings: () => request<Settings>('GET', '/api/settings'),
   saveSettings: (s: Settings) => request<Settings>('PUT', '/api/settings', s),
-  notifications: () => request<Notifications>('GET', '/api/notifications'),
-  testNotifications: () => request<TestResult[]>('POST', '/api/notifications/test'),
+  webhooks: () => request<Webhook[]>('GET', '/api/webhooks'),
+  createWebhook: (w: WebhookInput) => request<Webhook>('POST', '/api/webhooks', w),
+  updateWebhook: (id: number, w: WebhookInput) => request<Webhook>('PUT', `/api/webhooks/${id}`, w),
+  deleteWebhook: (id: number) => request<void>('DELETE', `/api/webhooks/${id}`),
+  testWebhook: (id: number) => request<TestResult>('POST', `/api/webhooks/${id}/test`),
+  previewWebhook: (w: WebhookInput, eventType: string) =>
+    request<WebhookPreview>('POST', '/api/webhooks/preview', { ...w, event_type: eventType }),
   info: () => request<Info>('GET', '/api/info'),
 }

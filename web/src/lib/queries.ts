@@ -7,6 +7,7 @@ import {
   type Settings,
   type TunnelHistoryFilter,
   type UpdateLogFilter,
+  type WebhookInput,
 } from './api'
 import { useLive } from './live-context'
 import { keys } from './queries-keys'
@@ -156,15 +157,32 @@ export function useSaveSettings() {
   })
 }
 
-export function useNotifications() {
-  return useQuery({ queryKey: keys.notifications, queryFn: api.notifications })
+export function useWebhooks() {
+  return useQuery({ queryKey: keys.webhooks, queryFn: api.webhooks })
 }
 
-export function useTestNotifications() {
+export function useSaveWebhook() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: api.testNotifications,
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.notifications }),
+    mutationFn: ({ id, input }: { id?: number; input: WebhookInput }) =>
+      id ? api.updateWebhook(id, input) : api.createWebhook(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.webhooks }),
+  })
+}
+
+export function useDeleteWebhook() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.deleteWebhook,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.webhooks }),
+  })
+}
+
+export function useTestWebhook() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.testWebhook,
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.webhooks }),
   })
 }
 

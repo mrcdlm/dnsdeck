@@ -7,7 +7,6 @@ import (
 
 	"github.com/mrcdlm/dnsdeck/internal/config"
 	"github.com/mrcdlm/dnsdeck/internal/events"
-	"github.com/mrcdlm/dnsdeck/internal/notify"
 )
 
 type settingsService interface {
@@ -16,18 +15,12 @@ type settingsService interface {
 	SourceNames() []string
 }
 
-type notifyService interface {
-	Status() []notify.ChannelStatus
-	SendTest(ctx context.Context) []notify.TestResult
-}
-
 // Info sind nicht geheime Angaben zur Installation.
 type Info struct {
-	Version       string `json:"version"`
-	CFTokenSet    bool   `json:"cf_token_set"`
-	CFAccountSet  bool   `json:"cf_account_set"`
-	DataDir       string `json:"data_dir"`
-	NotifyChannel int    `json:"notify_channels"`
+	Version      string `json:"version"`
+	CFTokenSet   bool   `json:"cf_token_set"`
+	CFAccountSet bool   `json:"cf_account_set"`
+	DataDir      string `json:"data_dir"`
 }
 
 type ipSourceDTO struct {
@@ -36,11 +29,10 @@ type ipSourceDTO struct {
 }
 
 type settingsDTO struct {
-	IPCheckIntervalSeconds int             `json:"ip_check_interval_seconds"`
-	TunnelIntervalSeconds  int             `json:"tunnel_interval_seconds"`
-	IPSources              []ipSourceDTO   `json:"ip_sources"` // Reihenfolge = Priorität
-	NotifyEvents           map[string]bool `json:"notify_events"`
-	Limits                 map[string]int  `json:"limits"`
+	IPCheckIntervalSeconds int            `json:"ip_check_interval_seconds"`
+	TunnelIntervalSeconds  int            `json:"tunnel_interval_seconds"`
+	IPSources              []ipSourceDTO  `json:"ip_sources"` // Reihenfolge = Priorität
+	Limits                 map[string]int `json:"limits"`
 }
 
 func (s *Server) settingsToDTO(c config.Settings) settingsDTO {
@@ -55,15 +47,10 @@ func (s *Server) settingsToDTO(c config.Settings) settingsDTO {
 			sources = append(sources, ipSourceDTO{Name: n, Enabled: false})
 		}
 	}
-	ev := map[string]bool{}
-	for _, t := range notify.EventTypes {
-		ev[t] = c.NotifyEnabled(t)
-	}
 	return settingsDTO{
 		IPCheckIntervalSeconds: int(c.IPCheckInterval.Seconds()),
 		TunnelIntervalSeconds:  int(c.TunnelInterval.Seconds()),
 		IPSources:              sources,
-		NotifyEvents:           ev,
 		Limits: map[string]int{
 			"ip_check_interval_min": int(config.MinIPCheckInterval.Seconds()),
 			"ip_check_interval_max": int(config.MaxIPCheckInterval.Seconds()),
@@ -97,11 +84,10 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		IPCheckIntervalSeconds int             `json:"ip_check_interval_seconds"`
-		TunnelIntervalSeconds  int             `json:"tunnel_interval_seconds"`
-		IPSources              []ipSourceDTO   `json:"ip_sources"`
-		NotifyEvents           map[string]bool `json:"notify_events"`
-		Limits                 map[string]int  `json:"limits"` // wird ignoriert (Rückgabe von GET)
+		IPCheckIntervalSeconds int            `json:"ip_check_interval_seconds"`
+		TunnelIntervalSeconds  int            `json:"tunnel_interval_seconds"`
+		IPSources              []ipSourceDTO  `json:"ip_sources"`
+		Limits                 map[string]int `json:"limits"` // wird ignoriert (Rückgabe von GET)
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -113,12 +99,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	for _, src := range in.IPSources {
 		if src.Enabled {
 			next.IPSources = append(next.IPSources, src.Name)
-		}
-	}
-	next.NotifyEvents = map[string]bool{}
-	for _, t := range notify.EventTypes {
-		if on, ok := in.NotifyEvents[t]; ok {
-			next.NotifyEvents[t] = on
 		}
 	}
 
@@ -137,29 +117,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		s.events.Publish(events.TopicSettings)
 	}
 	writeJSON(w, http.StatusOK, s.settingsToDTO(saved))
-}
-
-type notificationsDTO struct {
-	Channels    []notify.ChannelStatus `json:"channels"`
-	ConfigError string                 `json:"config_error,omitempty"`
-}
-
-func (s *Server) handleNotifications(w http.ResponseWriter, _ *http.Request) {
-	o := notificationsDTO{Channels: []notify.ChannelStatus{}, ConfigError: s.notifyConfigError}
-	if s.notify != nil {
-		o.Channels = s.notify.Status()
-	}
-	writeJSON(w, http.StatusOK, o)
-}
-
-func (s *Server) handleNotificationTest(w http.ResponseWriter, r *http.Request) {
-	if s.notify == nil || len(s.notify.Status()) == 0 {
-		writeError(w, http.StatusServiceUnavailable, "keine Benachrichtigungskanäle konfiguriert (NOTIFY_*)")
-		return
-	}
-	ctx, cancel := detached(r)
-	defer cancel()
-	writeJSON(w, http.StatusOK, s.notify.SendTest(ctx))
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, _ *http.Request) {
