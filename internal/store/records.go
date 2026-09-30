@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -42,12 +43,14 @@ type Record struct {
 	// MessageMsg: übersetzbare Meldung.
 	Message    string   `json:"message,omitempty"`
 	MessageMsg i18n.Msg `json:"-"`
-	// Propagation: Ergebnis der letzten DNS-Verbreitungsprüfung (JSON).
-	Propagation   string     `json:"-"`
-	LastCheckedAt *time.Time `json:"last_checked_at,omitempty"`
-	LastChangedAt *time.Time `json:"last_changed_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	// Propagation: Ergebnis der letzten DNS-Verbreitungsprüfung (dnscheck.Result als JSON).
+	Propagation json.RawMessage `json:"propagation,omitempty"`
+	// PropagationWatching: die Prüfung wiederholt sich gerade (von der API gesetzt).
+	PropagationWatching bool       `json:"propagation_watching,omitempty"`
+	LastCheckedAt       *time.Time `json:"last_checked_at,omitempty"`
+	LastChangedAt       *time.Time `json:"last_changed_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 // RecordSyncState ist das Ergebnis eines Abgleichs.
@@ -208,7 +211,10 @@ func scanRecord(sc scanner) (Record, error) {
 		return Record{}, err
 	}
 	r.ProviderRecordID, r.CurrentIP, r.Message = providerID.String, currentIP.String, msg.String
-	r.MessageMsg, r.Propagation = i18n.Decode(msgI18n.String), propagation.String
+	r.MessageMsg = i18n.Decode(msgI18n.String)
+	if propagation.Valid {
+		r.Propagation = json.RawMessage(propagation.String)
+	}
 	if r.LastCheckedAt, err = parseNullTime(checked); err != nil {
 		return Record{}, err
 	}
@@ -243,7 +249,7 @@ func mapConstraint(err error) error {
 }
 
 // SetRecordPropagation speichert das Ergebnis einer Verbreitungsprüfung (JSON).
-func (s *Store) SetRecordPropagation(ctx context.Context, id int64, resultJSON string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE records SET propagation = NULLIF(?, '') WHERE id = ?`, resultJSON, id)
+func (s *Store) SetRecordPropagation(ctx context.Context, id int64, result []byte) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE records SET propagation = NULLIF(?, '') WHERE id = ?`, string(result), id)
 	return err
 }

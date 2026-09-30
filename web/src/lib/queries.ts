@@ -102,6 +102,14 @@ export function useSyncRecord() {
   return useMutation({ mutationFn: api.syncRecord, onSettled: invalidate })
 }
 
+export function useCheckPropagation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.checkPropagation,
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.records }),
+  })
+}
+
 export function useTunnels() {
   const poll = usePollInterval()
   return useQuery({ queryKey: keys.tunnels, queryFn: api.tunnels, refetchInterval: poll })

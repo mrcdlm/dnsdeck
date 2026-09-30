@@ -271,10 +271,10 @@
     "sourcesMin": "Enable at least {{min}} sources.",
     "moveUp": "Move {{name}} up",
     "moveDown": "Move {{name}} down",
-    "notifications": "Notifications",
-    "notificationsHint": "Applies to all webhooks.",
+    "notifications": "Language",
+    "notificationsHint": "Title and text of all webhook messages.",
     "notifyLanguage": "Notification language",
-    "notifyLanguageHint": "Title and text of messages sent to webhooks. Independent of the interface language.",
+    "notifyLanguageHint": "Independent of the interface language, which each browser chooses itself.",
     "saved": "Saved",
     "discard": "Discard"
   },
@@ -357,5 +357,44 @@
     "dataDir": "Data directory",
     "set": "set",
     "missing": "missing"
+  },
+  "propagation": {
+    "title": "DNS propagation",
+    "detailsLabel": "DNS propagation of {{name}}",
+    "checking": "checking …",
+    "unknown": "—",
+    "resolved": "resolves",
+    "someFailed": "Some servers did not respond",
+    "status": {
+      "propagated": "Up to date everywhere",
+      "partial": "Partially propagated – some resolvers still serve the old state from their cache",
+      "pending": "Not propagated yet",
+      "error": "Error"
+    },
+    "error": {
+      "timeout": "Timeout",
+      "failed": "Error"
+    },
+    "notFound": "not found",
+    "expect": "expected: {{ip}}",
+    "expectProxied": "proxied – IP hidden, only resolvability is checked",
+    "never": "Not checked yet.",
+    "stale": "Outdated – the record has changed since the check",
+    "etaSeconds_one": "everywhere within {{count}} second",
+    "etaSeconds_other": "everywhere within {{count}} seconds",
+    "eta_one": "everywhere within ~{{count}} minute",
+    "eta_other": "everywhere within ~{{count}} minutes",
+    "col": {
+      "server": "Server",
+      "answer": "Answer",
+      "match": "Match"
+    },
+    "authoritative": "authoritative",
+    "match": "matches",
+    "noMatch": "does not match",
+    "checkedAt": "Checked {{time}}",
+    "watching": "repeating automatically",
+    "checkNow": "Check now",
+    "disabled": "DNS propagation check disabled (DNSCHECK_RESOLVERS=off)"
   }
 }

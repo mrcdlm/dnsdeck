@@ -16,6 +16,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/api"
 	"github.com/mrcdlm/dnsdeck/internal/config"
 	"github.com/mrcdlm/dnsdeck/internal/ddns"
+	"github.com/mrcdlm/dnsdeck/internal/dnscheck"
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
@@ -122,6 +123,15 @@ func run() error {
 	updater.Notifier = dispatcher
 	svc := &ddns.Service{Tracker: tracker, Updater: updater}
 
+	// DNS-Verbreitung nach jeder Änderung prüfen (DNSCHECK_RESOLVERS=off schaltet ab).
+	var propagation api.PropagationChecker
+	if cfg.DNSCheckResolvers != nil {
+		ps := dnscheck.NewScheduler(ctx, dnscheck.New(cfg.DNSCheckResolvers, cfg.DNSCheckAuthoritative), st, log)
+		ps.Pub = broker
+		updater.OnChange = ps.Watch
+		propagation = ps
+	}
+
 	var tunnelClient interface {
 		ListTunnels(context.Context, string) ([]cloudflare.Tunnel, error)
 	}
@@ -179,9 +189,9 @@ func run() error {
 		Handler: api.NewServer(api.Deps{
 			Store: st, Tracker: tracker, DDNS: svc, Zones: zones,
 			Tunnels: monitor, Events: broker, Settings: settings,
-			Webhooks: dispatcher, WebhookEnv: os.LookupEnv,
+			Webhooks: dispatcher, WebhookEnv: os.LookupEnv, Propagation: propagation,
 			Info: api.Info{Version: version, CFTokenSet: cfg.CFAPIToken != "", CFAccountSet: cfg.CFAccountID != "",
-				DataDir: cfg.DataDir},
+				DataDir: cfg.DataDir, DNSCheck: propagation != nil},
 			Auth: auth, Log: log, Static: web.Dist(),
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,

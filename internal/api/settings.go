@@ -23,6 +23,8 @@ type Info struct {
 	CFTokenSet   bool   `json:"cf_token_set"`
 	CFAccountSet bool   `json:"cf_account_set"`
 	DataDir      string `json:"data_dir"`
+	// DNSCheck: Verbreitungsprüfung aktiv (DNSCHECK_RESOLVERS ≠ off)
+	DNSCheck bool `json:"dnscheck"`
 }
 
 type ipSourceDTO struct {

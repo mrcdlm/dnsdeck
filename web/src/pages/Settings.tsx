@@ -3,7 +3,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  Bell,
+  Languages,
   Check,
   Info as InfoIcon,
   Loader2,
@@ -235,7 +235,7 @@ function SettingsForm({
         )}
       </Section>
 
-      <Section icon={<Bell className="size-5" />} title={t('settings.notifications')} description={t('settings.notificationsHint')}>
+      <Section icon={<Languages className="size-5" />} title={t('settings.notifications')} description={t('settings.notificationsHint')}>
         <SettingRow id="notify-language" label={t('settings.notifyLanguage')} hint={t('settings.notifyLanguageHint')}>
           <Select
             value={draft.notify_language}

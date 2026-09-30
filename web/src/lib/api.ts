@@ -51,10 +51,43 @@ export interface DnsRecord {
   current_ip?: string
   status: RecordStatus
   message?: string
+  /** Ergebnis der letzten DNS-Verbreitungsprüfung */
+  propagation?: Propagation
+  /** Die Prüfung wiederholt sich gerade (nach einer Änderung) */
+  propagation_watching?: boolean
   last_checked_at?: string
   last_changed_at?: string
   created_at: string
   updated_at: string
+}
+
+export type PropagationStatus = 'propagated' | 'partial' | 'pending' | 'error'
+
+export interface PropagationAnswer {
+  resolver: string
+  addr?: string
+  authoritative?: boolean
+  values?: string[]
+  /** verbleibende Cache-Zeit in Sekunden */
+  ttl: number
+  rcode?: string
+  error?: 'timeout' | 'failed'
+  match: boolean
+}
+
+export interface Propagation {
+  checked_at: string
+  type: RecordType
+  /** erwartete IP; leer bei proxied */
+  expected?: string
+  proxied: boolean
+  status: PropagationStatus
+  matching: number
+  total: number
+  errors: number
+  /** spätestens nach so vielen Sekunden ab checked_at überall aktuell */
+  max_wait?: number
+  answers: PropagationAnswer[]
 }
 
 export interface RecordInput {
@@ -190,6 +223,8 @@ export interface Info {
   cf_token_set: boolean
   cf_account_set: boolean
   data_dir: string
+  /** DNS-Verbreitungsprüfung aktiv */
+  dnscheck: boolean
 }
 
 export interface IPHistoryFilter {
@@ -266,6 +301,7 @@ export const api = {
   updateRecord: (id: number, r: RecordInput) => request<DnsRecord>('PUT', `/api/records/${id}`, r),
   deleteRecord: (id: number) => request<void>('DELETE', `/api/records/${id}`),
   syncRecord: (id: number) => request<DnsRecord>('POST', `/api/records/${id}/sync`),
+  checkPropagation: (id: number) => request<DnsRecord>('POST', `/api/records/${id}/propagation`),
   syncAll: () => request<DnsRecord[]>('POST', '/api/records/sync'),
   updates: (limit = 20) => request<UpdateLogEntry[]>('GET', `/api/updates?limit=${limit}`),
   tunnels: () => request<TunnelOverview>('GET', '/api/tunnels'),

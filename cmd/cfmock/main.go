@@ -12,6 +12,12 @@
 //	GET  /_records                          aktueller Inhalt
 //	POST /_fail?status=500                  Ausfälle simulieren (status=0 beendet)
 //	POST /_tunnel?name=home&status=down     Tunnel-Status setzen (healthy|degraded|down|inactive)
+//
+// DNS (UDP) für die Verbreitungsprüfung, z. B. DNSCHECK_RESOLVERS=Aktuell=127.0.0.1:8553,Verzögert=127.0.0.1:8554
+// DNSCHECK_AUTHORITATIVE=off:
+//
+//	-dns :8553          liefert den aktuellen Stand der Mock-Records
+//	-dns-lagged :8554   liefert den Stand von vor -dns-lag (wie ein Resolver-Cache)
 package main
 
 import (
@@ -21,6 +27,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
 )
@@ -31,6 +38,9 @@ func main() {
 	zoneList := flag.String("zones", "example.com", "kommagetrennte Zonen")
 	account := flag.String("account", "dev-account", "Account-ID für Tunnels")
 	tunnelList := flag.String("tunnels", "home:healthy", "kommagetrennte Tunnels name:status")
+	dnsAddr := flag.String("dns", "", "DNS-Server mit aktuellem Stand (leer = aus), z. B. :8553")
+	dnsLaggedAddr := flag.String("dns-lagged", "", "DNS-Server mit verzögertem Stand (leer = aus), z. B. :8554")
+	dnsLag := flag.Duration("dns-lag", 20*time.Second, "Verzögerung für -dns-lagged")
 	flag.Parse()
 
 	var zones []cftest.Zone
@@ -50,6 +60,15 @@ func main() {
 			status = "healthy"
 		}
 		fake.AddTunnel(fmt.Sprintf("tunnel-%d", i+1), name, status)
+	}
+
+	if *dnsAddr != "" {
+		serveDNS(*dnsAddr, &dnsView{fake: fake})
+		log.Printf("DNS (aktuell) auf %s/udp", *dnsAddr)
+	}
+	if *dnsLaggedAddr != "" {
+		serveDNS(*dnsLaggedAddr, &dnsView{fake: fake, lag: *dnsLag})
+		log.Printf("DNS (%s verzögert) auf %s/udp", *dnsLag, *dnsLaggedAddr)
 	}
 
 	mux := http.NewServeMux()

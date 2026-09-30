@@ -52,6 +52,10 @@ type Updater struct {
 	Pub events.Publisher
 	// Notifier erhält Fehler und Erholungen (optional).
 	Notifier notify.Notifier
+	// OnChange wird nach einem Abgleich aufgerufen, dessen Ergebnis sich im
+	// DNS verbreiten muss – z. B. zum Start der Verbreitungsprüfung (optional,
+	// darf nicht blockieren).
+	OnChange func(id int64)
 }
 
 func NewUpdater(st recordStore, p providers.Provider, log *slog.Logger) *Updater {
@@ -127,7 +131,7 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 		u.log.Info("DNS-Eintrag angelegt", "record", r.Name, "type", r.Type, "ip", ip)
 		u.writeLog(ctx, r, trigger, store.ResultCreated, "", ip, i18n.M("ddns.created"), now)
 		u.recovered(ctx, r, trigger, ip, now)
-		return u.store.SetRecordSyncState(ctx, r.ID, synced(created, now, true))
+		return u.save(ctx, r.ID, synced(created, now, true), true)
 	}
 	if err != nil {
 		return u.fail(ctx, r, ip, trigger, now, err)
@@ -155,7 +159,9 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 				"proxied", cur.Proxied, "ttl", cur.TTL)
 		}
 		u.recovered(ctx, r, trigger, cur.Content, now)
-		return u.store.SetRecordSyncState(ctx, r.ID, synced(cur, now, false))
+		// Prüfen, wenn noch nie geprüft oder der Proxy bei Cloudflare umgestellt wurde
+		check := adopting || len(r.Propagation) == 0 || cur.Proxied != r.Proxied
+		return u.save(ctx, r.ID, synced(cur, now, false), check)
 	}
 
 	upd, err := u.provider.UpdateRecord(ctx, want)
@@ -170,7 +176,19 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 		"old", cur.Content, "new", ip, "changes", i18n.T(i18n.EN, msg))
 	u.writeLog(ctx, r, trigger, store.ResultUpdated, cur.Content, ip, msg, now)
 	u.recovered(ctx, r, trigger, ip, now)
-	return u.store.SetRecordSyncState(ctx, r.ID, synced(upd, now, true))
+	return u.save(ctx, r.ID, synced(upd, now, true), true)
+}
+
+// save speichert das Ergebnis eines erfolgreichen Abgleichs; check: danach
+// OnChange aufrufen.
+func (u *Updater) save(ctx context.Context, id int64, st store.RecordSyncState, check bool) error {
+	if err := u.store.SetRecordSyncState(ctx, id, st); err != nil {
+		return err
+	}
+	if check && u.OnChange != nil {
+		u.OnChange(id)
+	}
+	return nil
 }
 
 // recovered protokolliert und meldet, dass ein zuvor fehlerhafter Record

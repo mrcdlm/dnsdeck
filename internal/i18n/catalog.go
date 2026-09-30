@@ -40,6 +40,8 @@ var catalog = map[string]entry{
 	"tunnels.not_configured": {"Tunnel-Monitoring nicht konfiguriert (CF_API_TOKEN/CF_ACCOUNT_ID)", "Tunnel monitoring is not configured (CF_API_TOKEN/CF_ACCOUNT_ID)"},
 
 	// Records
+	"dnscheck.disabled":        {"DNS-Verbreitungsprüfung ist abgeschaltet (DNSCHECK_RESOLVERS=off)", "DNS propagation check is disabled (DNSCHECK_RESOLVERS=off)"},
+	"dnscheck.no_ip":           {"Der Record hat noch keine IP – erst abgleichen", "The record has no IP yet – sync it first"},
 	"record.not_found":         {"Record nicht gefunden", "Record not found"},
 	"record.conflict":          {"{type}-Eintrag für {name} wird bereits verwaltet", "The {type} record for {name} is already managed"},
 	"record.zone_unknown":      {"Zone unbekannt", "Unknown zone"},

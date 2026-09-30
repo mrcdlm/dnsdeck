@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/mrcdlm/dnsdeck/internal/dnscheck"
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
@@ -64,10 +65,20 @@ func (s *Server) writeProviderError(w http.ResponseWriter, r *http.Request, err 
 	writeMsg(w, r, http.StatusBadGateway, i18n.FromError(err))
 }
 
-// localizeRecord setzt Message in der Sprache der Anfrage (Alttexte bleiben).
-func localizeRecord(rec store.Record, lang i18n.Lang) store.Record {
+// PropagationChecker prüft die DNS-Verbreitung eines Records.
+type PropagationChecker interface {
+	CheckNow(ctx context.Context, id int64) (dnscheck.Result, error)
+	Watching(id int64) bool
+}
+
+// localizeRecord setzt Message in der Sprache der Anfrage (Alttexte bleiben)
+// und ergänzt, ob die Verbreitung gerade geprüft wird.
+func (s *Server) localizeRecord(rec store.Record, lang i18n.Lang) store.Record {
 	if !rec.MessageMsg.IsZero() {
 		rec.Message = i18n.T(lang, rec.MessageMsg)
+	}
+	if s.propagation != nil {
+		rec.PropagationWatching = s.propagation.Watching(rec.ID)
 	}
 	return rec
 }
@@ -80,7 +91,7 @@ func (s *Server) handleListRecords(w http.ResponseWriter, r *http.Request) {
 	}
 	lang := i18n.FromRequest(r)
 	for i := range recs {
-		recs[i] = localizeRecord(recs[i], lang)
+		recs[i] = s.localizeRecord(recs[i], lang)
 	}
 	writeJSON(w, http.StatusOK, recs)
 }
@@ -179,7 +190,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "Record anlegen", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, localizeRecord(s.syncAfterSave(r, created), i18n.FromRequest(r)))
+	writeJSON(w, http.StatusCreated, s.localizeRecord(s.syncAfterSave(r, created), i18n.FromRequest(r)))
 }
 
 func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +220,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "Record ändern", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, localizeRecord(s.syncAfterSave(r, updated), i18n.FromRequest(r)))
+	writeJSON(w, http.StatusOK, s.localizeRecord(s.syncAfterSave(r, updated), i18n.FromRequest(r)))
 }
 
 // syncAfterSave gleicht einen gespeicherten Record sofort ab, damit der
@@ -261,7 +272,39 @@ func (s *Server) handleSyncRecord(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "Record abgleichen", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, localizeRecord(rec, i18n.FromRequest(r)))
+	writeJSON(w, http.StatusOK, s.localizeRecord(rec, i18n.FromRequest(r)))
+}
+
+// handleCheckPropagation prüft die DNS-Verbreitung sofort.
+func (s *Server) handleCheckPropagation(w http.ResponseWriter, r *http.Request) {
+	id, ok := recordID(w, r)
+	if !ok {
+		return
+	}
+	if s.propagation == nil {
+		writeMsg(w, r, http.StatusNotFound, i18n.M("dnscheck.disabled"))
+		return
+	}
+	ctx, cancel := detached(r)
+	defer cancel()
+	_, err := s.propagation.CheckNow(ctx, id)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		writeMsg(w, r, http.StatusNotFound, i18n.M("record.not_found"))
+		return
+	case errors.Is(err, dnscheck.ErrNothingToCheck):
+		writeMsg(w, r, http.StatusConflict, i18n.M("dnscheck.no_ip"))
+		return
+	case err != nil:
+		s.internalError(w, r, "DNS-Verbreitung prüfen", err)
+		return
+	}
+	rec, err := s.store.GetRecord(r.Context(), id)
+	if err != nil {
+		s.internalError(w, r, "Record lesen", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.localizeRecord(rec, i18n.FromRequest(r)))
 }
 
 func (s *Server) handleSyncAll(w http.ResponseWriter, r *http.Request) {
