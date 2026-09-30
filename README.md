@@ -18,12 +18,19 @@ ein Go-Binary mit eingebettetem React-Frontend, ausgeliefert als ein Container.
 
 ## Betrieb mit Docker Compose (Server)
 
+Stack unter `/opt/stacks/dnsdeck`, Daten unter `/srv/dnsdeck`:
+
 ```sh
-# auf dem Server, z. B. /opt/stacks/dnsdeck/
-# docker-compose.yml und .env.example aus deploy/ dorthin kopieren
-cp .env.example .env              # Werte eintragen
-mkdir -p data && sudo chown 65532:65532 data   # Container läuft als UID 65532
-docker compose pull && docker compose up -d
+# Daten-Verzeichnis (Container läuft als UID 65532)
+sudo mkdir -p /srv/dnsdeck && sudo chown 65532:65532 /srv/dnsdeck
+
+# Stack
+sudo mkdir -p /opt/stacks/dnsdeck && cd /opt/stacks/dnsdeck
+sudo curl -fsSLO https://raw.githubusercontent.com/mrcdlm/dnsdeck/main/deploy/docker-compose.yml
+sudo curl -fsSL  https://raw.githubusercontent.com/mrcdlm/dnsdeck/main/deploy/.env.example -o .env
+sudo chmod 600 .env && sudo nano .env      # Werte eintragen
+
+sudo docker compose pull && sudo docker compose up -d
 ```
 
 Die Version ist fest in `.env` eingetragen (`DNSDECK_VERSION=0.1.0`, ohne „v“) –

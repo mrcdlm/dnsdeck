@@ -1,11 +1,12 @@
-# Produktion: Image von ghcr.io (gebaut von .github/workflows/release.yml).
-# Aktualisieren: DNSDECK_VERSION in .env erhöhen, dann
+# Stack: /opt/stacks/dnsdeck, Daten: /srv/dnsdeck, Version in .env
+# Einmalig: mkdir -p /srv/dnsdeck && chown 65532:65532 /srv/dnsdeck
+# Update: DNSDECK_VERSION in .env erhöhen (Release Notes lesen), dann
 #   docker compose pull && docker compose up -d
 # Lokal aus dem Quellcode bauen: docker-compose.dev.yml
+name: dnsdeck
 services:
   dnsdeck:
-    # Feste Version aus .env (DNSDECK_VERSION), nie latest: Updates bewusst
-    # nach Lesen der Release Notes (github.com/mrcdlm/dnsdeck/releases).
+    # Feste Version aus .env, nie latest
     image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?DNSDECK_VERSION in .env setzen, z. B. 0.1.0}
     container_name: dnsdeck
     restart: unless-stopped
@@ -15,10 +16,8 @@ services:
     environment:
       TZ: Europe/Berlin
     volumes:
-      # Stack liegt unter /opt/stacks/dnsdeck/ → Daten landen in /opt/stacks/dnsdeck/data
       # ":Z" setzt das SELinux-Label (auf MicroOS nötig)
-      # Der Container läuft als UID 65532: einmalig "sudo chown 65532:65532 data"
-      - ./data:/data:Z
+      - /srv/dnsdeck:/data:Z
     healthcheck:
       test: ["CMD", "/app/server", "healthcheck"]
       interval: 30s
