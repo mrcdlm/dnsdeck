@@ -27,8 +27,10 @@ type Env func(name string) (string, bool)
 
 var (
 	placeholderRe = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
-	envCallRe     = regexp.MustCompile(`\benv\s+"([^"]*)"`)
-	headerNameRe  = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
+	// Header/Parameter, deren Wert fast immer ein Geheimnis ist.
+	secretNameRe = regexp.MustCompile(`(?i)(authorization|token|secret|passw|api[-_]?key|access[-_]?key|[-_]key$|^key$|signature|^sig$|auth)`)
+	envCallRe    = regexp.MustCompile(`\benv\s+"([^"]*)"`)
+	headerNameRe = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 )
 
 // ValidationError ist ein Konfigurationsfehler, der dem Benutzer angezeigt wird.
@@ -127,6 +129,7 @@ func funcs(env Env) template.FuncMap {
 			}
 			return v, nil
 		},
+		"mul":      func(a, b int) int { return a * b },
 		"upper":    strings.ToUpper,
 		"lower":    strings.ToLower,
 		"urlquery": url.QueryEscape,
@@ -174,7 +177,10 @@ func Render(w store.Webhook, ev Event, env Env) (Request, error) {
 	}
 
 	if w.Method != http.MethodGet {
-		body, err := renderBody(w, ev, env)
+		// In der Vorschau steht statt env-Werten "${NAME}" im Body; ungequotet
+		// ergibt das kein JSON, obwohl es beim Senden gültig wäre. Validate
+		// prüft JSON deshalb separat mit neutralem Testwert.
+		body, err := renderBody(w, ev, env, !preview)
 		if err != nil {
 			return Request{}, err
 		}
@@ -186,7 +192,7 @@ func Render(w store.Webhook, ev Event, env Env) (Request, error) {
 	return req, nil
 }
 
-func renderBody(w store.Webhook, ev Event, env Env) (string, error) {
+func renderBody(w store.Webhook, ev Event, env Env, checkJSON bool) (string, error) {
 	if strings.TrimSpace(w.BodyTemplate) == "" {
 		b, _ := json.Marshal(ev)
 		return string(b), nil
@@ -201,7 +207,7 @@ func renderBody(w store.Webhook, ev Event, env Env) (string, error) {
 	if err := tpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("Template: %w", err)
 	}
-	if strings.Contains(strings.ToLower(w.ContentType), "json") && !json.Valid(buf.Bytes()) {
+	if checkJSON && strings.Contains(strings.ToLower(w.ContentType), "json") && !json.Valid(buf.Bytes()) {
 		return "", errors.New("Template ergibt kein gültiges JSON – Texte mit {{json .Title}} einsetzen")
 	}
 	return buf.String(), nil
@@ -247,11 +253,21 @@ func Validate(w store.Webhook) error {
 			msgs = append(msgs, err.Error())
 		}
 	}
+	msgs = append(msgs, plainSecrets(w)...)
 	if len(msgs) == 0 {
+		// Probe-Rendering; env-Werte durch "0" ersetzen – das ist sowohl in
+		// Anführungszeichen als auch ungequotet (Zahl) gültiges JSON.
+		zero := func(string) (string, bool) { return "0", true }
 		for _, t := range append(slices.Clone(EventTypes), EventTest) {
 			if _, err := Render(w, SampleEvent(t), nil); err != nil {
 				msgs = append(msgs, err.Error())
 				break
+			}
+			if w.Method != http.MethodGet {
+				if _, err := renderBody(w, SampleEvent(t), zero, true); err != nil {
+					msgs = append(msgs, err.Error())
+					break
+				}
 			}
 		}
 	}
@@ -259,6 +275,46 @@ func Validate(w store.Webhook) error {
 		return &ValidationError{Msg: strings.Join(msgs, "; ")}
 	}
 	return nil
+}
+
+// Adressen, deren Pfad selbst das Geheimnis ist.
+var secretURLs = []struct{ host, pathPrefix string }{
+	{"discord.com", "/api/webhooks/"}, {"discordapp.com", "/api/webhooks/"},
+	{"hooks.slack.com", "/"}, {"api.telegram.org", "/bot"},
+}
+
+// plainSecrets erkennt typische, direkt eingetragene Geheimnisse (statt
+// ${WEBHOOK_…}), damit sie nicht in der Datenbank landen.
+func plainSecrets(w store.Webhook) []string {
+	const hint = " – bitte als ${WEBHOOK_NAME} eintragen und den Wert in deploy/.env setzen"
+	var msgs []string
+	for _, h := range w.Headers {
+		if secretNameRe.MatchString(h.Name) && !placeholderRe.MatchString(h.Value) && strings.TrimSpace(h.Value) != "" {
+			msgs = append(msgs, fmt.Sprintf("Header %s enthält vermutlich ein Geheimnis im Klartext%s", h.Name, hint))
+		}
+	}
+	u, err := url.Parse(w.URL)
+	if err != nil {
+		return msgs
+	}
+	if u.User != nil {
+		msgs = append(msgs, "URL enthält Benutzer/Passwort"+hint)
+	}
+	for k, vals := range u.Query() {
+		for _, v := range vals {
+			if secretNameRe.MatchString(k) && v != "" && !placeholderRe.MatchString(v) {
+				msgs = append(msgs, fmt.Sprintf("URL-Parameter %s enthält vermutlich ein Geheimnis%s", k, hint))
+			}
+		}
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, s := range secretURLs {
+		if (host == s.host || strings.HasSuffix(host, "."+s.host)) && strings.HasPrefix(u.Path, s.pathPrefix) &&
+			!placeholderRe.MatchString(w.URL) {
+			msgs = append(msgs, "Diese URL enthält selbst das Geheimnis (Token im Pfad)"+hint)
+		}
+	}
+	return msgs
 }
 
 // SampleEvent liefert ein Beispielereignis (Vorschau, Validierung, Test).

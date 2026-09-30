@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -242,4 +243,103 @@ func TestDispatcher(t *testing.T) {
 	}
 	var nilNotifier Notifier
 	Send(nilNotifier, ev)
+}
+
+func TestPlainSecretsRejected(t *testing.T) {
+	base := store.Webhook{Name: "x", Method: "POST", URL: "https://x.example/hook", ContentType: "text/plain"}
+	for name, mod := range map[string]func(*store.Webhook){
+		"Authorization":  func(w *store.Webhook) { w.Headers = []store.Header{{Name: "Authorization", Value: "Bearer abc123"}} },
+		"X-Gotify-Key":   func(w *store.Webhook) { w.Headers = []store.Header{{Name: "X-Gotify-Key", Value: "Axyz"}} },
+		"Query-Token":    func(w *store.Webhook) { w.URL = "https://x.example/hook?token=abc" },
+		"Userinfo":       func(w *store.Webhook) { w.URL = "https://user:pw@x.example/hook" },
+		"Discord-URL":    func(w *store.Webhook) { w.URL = "https://discord.com/api/webhooks/123/abc" },
+		"Slack-URL":      func(w *store.Webhook) { w.URL = "https://hooks.slack.com/services/T/B/x" },
+		"Telegram-Token": func(w *store.Webhook) { w.URL = "https://api.telegram.org/bot123:abc/sendMessage" },
+	} {
+		w := base
+		mod(&w)
+		if err := Validate(w); err == nil || !strings.Contains(err.Error(), "${WEBHOOK_NAME}") {
+			t.Errorf("%s: Klartext-Geheimnis nicht erkannt: %v", name, err)
+		}
+	}
+	for name, mod := range map[string]func(*store.Webhook){
+		"Header mit Platzhalter": func(w *store.Webhook) {
+			w.Headers = []store.Header{{Name: "Authorization", Value: "Bearer ${WEBHOOK_T}"}}
+		},
+		"harmloser Header":   func(w *store.Webhook) { w.Headers = []store.Header{{Name: "X-Quelle", Value: "dnsdeck"}} },
+		"Discord mit Platzh": func(w *store.Webhook) { w.URL = "${WEBHOOK_DISCORD_URL}" },
+		"Telegram mit Platz": func(w *store.Webhook) { w.URL = "https://api.telegram.org/bot${WEBHOOK_TG}/sendMessage" },
+		"Query ohne Geheim":  func(w *store.Webhook) { w.URL = "https://x.example/hook?format=json" },
+	} {
+		w := base
+		mod(&w)
+		if err := Validate(w); err != nil {
+			t.Errorf("%s: fälschlich abgelehnt: %v", name, err)
+		}
+	}
+}
+
+func TestUnquotedEnvAndMul(t *testing.T) {
+	w := store.Webhook{Name: "tg", Method: "POST", URL: "https://x.example", ContentType: "application/json",
+		BodyTemplate: `{"chat_id": {{env "WEBHOOK_CHAT"}}, "priority": {{mul .Priority 2}}}`}
+	if err := Validate(w); err != nil {
+		t.Fatalf("ungequotete env-Zahl abgelehnt: %v", err)
+	}
+	r, err := Render(w, ev, envMap(map[string]string{"WEBHOOK_CHAT": "12345"}))
+	if err != nil || r.Body != `{"chat_id": 12345, "priority": 8}` {
+		t.Fatalf("body=%q err=%v", r.Body, err)
+	}
+	if p, err := Render(w, ev, nil); err != nil || !strings.Contains(p.Body, "${WEBHOOK_CHAT}") {
+		t.Fatalf("Vorschau: %+v %v", p, err)
+	}
+}
+
+func TestRedirectToOtherHostNotFollowed(t *testing.T) {
+	target, gotTarget := recorder(t, 200)
+	redirect := httptest.NewServer(http.RedirectHandler(target.URL+"/fremd", http.StatusFound))
+	t.Cleanup(redirect.Close)
+	st := &memStore{result: map[int64]error{}, hooks: []store.Webhook{{ID: 1, Name: "r", Method: "POST",
+		URL: redirect.URL, Headers: []store.Header{{Name: "X-Gotify-Key", Value: "${WEBHOOK_KEY}"}}}}}
+	d := NewDispatcher(st, envMap(map[string]string{"WEBHOOK_KEY": "geheim"}), slog.New(slog.DiscardHandler))
+	res, _ := d.SendTest(context.Background(), 1)
+	if res.OK || !strings.Contains(res.Error, "Weiterleitung") || len(gotTarget()) != 0 {
+		t.Fatalf("Weiterleitung verfolgt: %+v, %d Anfragen beim Ziel", res, len(gotTarget()))
+	}
+}
+
+type countPub struct{ n atomic.Int32 }
+
+func (c *countPub) Publish(string) { c.n.Add(1) }
+
+func TestParallelDelivery(t *testing.T) {
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(700 * time.Millisecond)
+		w.WriteHeader(500)
+	}))
+	t.Cleanup(slow.Close)
+	fast, gotFast := recorder(t, 200)
+	st := &memStore{result: map[int64]error{}, hooks: []store.Webhook{
+		{ID: 1, Name: "langsam", Enabled: true, Method: "POST", URL: slow.URL, Events: []string{EventTunnelStatus}},
+		{ID: 2, Name: "schnell", Enabled: true, Method: "POST", URL: fast.URL, Events: []string{EventTunnelStatus}},
+	}}
+	pub := &countPub{}
+	d := NewDispatcher(st, envMap(nil), slog.New(slog.DiscardHandler))
+	d.Pub, d.backoff = pub, time.Millisecond
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	d.Start(ctx)
+	start := time.Now()
+	d.Notify(ev)
+	for len(gotFast()) == 0 && time.Since(start) < 3*time.Second {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if took := time.Since(start); took > 500*time.Millisecond {
+		t.Fatalf("schneller Webhook wartete auf langsamen: %v", took)
+	}
+	for pub.n.Load() == 0 && time.Since(start) < 5*time.Second {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if pub.n.Load() != 1 {
+		t.Fatalf("Live-Ereignis nach Zustellung fehlt: %d", pub.n.Load())
+	}
 }

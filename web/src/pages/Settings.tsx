@@ -1,5 +1,5 @@
 import { AlertTriangle, ArrowDown, ArrowUp, Check, Info as InfoIcon, Loader2, Pencil, Plus, Send, Timer, Trash2, Wifi, X } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import type { Settings as SettingsData, Webhook, WebhookInput } from '@/lib/api'
+import type { Settings as SettingsData, Webhook } from '@/lib/api'
 import { absoluteTime, relativeTime, useNow } from '@/lib/format'
 import {
   useDeleteWebhook,
@@ -30,7 +30,7 @@ import {
   useTestWebhook,
   useWebhooks,
 } from '@/lib/queries'
-import { eventInfo } from '@/lib/webhooks'
+import { eventInfo, webhookInput } from '@/lib/webhooks'
 
 const ipIntervals = [60, 120, 300, 600, 900, 1800, 3600]
 const tunnelIntervals = [30, 60, 120, 300, 600]
@@ -91,10 +91,19 @@ function Section({ icon, title, description, children }: { icon: ReactNode; titl
   )
 }
 
-function SettingsForm({ initial }: { initial: SettingsData }) {
+// saved liegt beim Aufrufer: das Formular wird nach dem Speichern mit den neuen
+// Werten neu aufgebaut (key) und verlöre sonst die Bestätigung.
+function SettingsForm({
+  initial,
+  saved,
+  setSaved,
+}: {
+  initial: SettingsData
+  saved: boolean
+  setSaved: (v: boolean) => void
+}) {
   const save = useSaveSettings()
   const [draft, setDraft] = useState(initial)
-  const [saved, setSaved] = useState(false)
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial)
   const enabledSources = draft.ip_sources.filter((s) => s.enabled).length
   const minSources = draft.limits.ip_sources_min ?? 2
@@ -210,16 +219,14 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
   const save = useSaveWebhook()
   const now = useNow()
   const { id, missing_env, last_error, last_sent_at } = webhook
-  const input: WebhookInput = {
-    name: webhook.name,
-    enabled: webhook.enabled,
-    method: webhook.method,
-    url: webhook.url,
-    headers: webhook.headers,
-    content_type: webhook.content_type,
-    body_template: webhook.body_template,
-    events: webhook.events,
-  }
+
+  // Testergebnis nur kurz zeigen – danach gilt wieder der gespeicherte Status.
+  const { reset: resetTest, data: testData } = test
+  useEffect(() => {
+    if (!testData) return
+    const t = setTimeout(resetTest, 8000)
+    return () => clearTimeout(t)
+  }, [testData, resetTest])
 
   return (
     <li className="flex flex-col gap-2 px-3 py-3" data-webhook={webhook.name}>
@@ -227,7 +234,8 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
         <Switch
           checked={webhook.enabled}
           aria-label={`${webhook.name} aktiv`}
-          onCheckedChange={(on) => save.mutate({ id, input: { ...input, enabled: on } })}
+          disabled={save.isPending}
+          onCheckedChange={(on) => save.mutate({ id, input: { ...webhookInput(webhook), enabled: on } })}
         />
         <span className="font-medium">{webhook.name}</span>
         {!webhook.enabled && <Badge variant="outline">inaktiv</Badge>}
@@ -265,6 +273,11 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
             Nicht gesetzt: <code className="font-mono">{missing_env.join(', ')}</code> – in deploy/.env eintragen und Container
             neu starten.
           </span>
+        </p>
+      )}
+      {save.isError && (
+        <p className="text-destructive text-xs break-words" role="alert">
+          Speichern fehlgeschlagen: {save.error.message}
         </p>
       )}
       <p className="text-xs">
@@ -388,6 +401,7 @@ function SystemInfo() {
 
 export function Settings() {
   const settings = useSettings()
+  const [saved, setSaved] = useState(false)
 
   return (
     <div className="flex flex-col gap-6">
@@ -401,7 +415,7 @@ export function Settings() {
         <p className="text-destructive text-sm">Einstellungen konnten nicht geladen werden: {settings.error.message}</p>
       ) : (
         // key: nach dem Speichern (oder Änderung in anderem Tab) neu initialisieren
-        <SettingsForm key={JSON.stringify(settings.data)} initial={settings.data} />
+        <SettingsForm key={JSON.stringify(settings.data)} initial={settings.data} saved={saved} setSaved={setSaved} />
       )}
       <Webhooks />
       <SystemInfo />

@@ -31,9 +31,19 @@ func TestWebhooksCRUD(t *testing.T) {
 		t.Fatalf("Erfolg: %+v", w)
 	}
 
+	// Nur Name/Aktiv/Ereignisse geändert → Zustellstatus bleibt
+	s.SetWebhookResult(ctx, w.ID, now, errors.New("HTTP 502"))
+	w.Enabled = false
+	w.Events = []string{"ip_change"}
+	w, _ = s.UpdateWebhook(ctx, w)
+	if w.LastError != "HTTP 502" || w.LastSentAt == nil {
+		t.Fatalf("Status verloren: %+v", w)
+	}
+
+	// URL/Header/Body geändert → Status zurückgesetzt
 	w.Name, w.Headers, w.Events = "Neu", nil, nil
 	w, err = s.UpdateWebhook(ctx, w)
-	if err != nil || w.Name != "Neu" || w.Headers == nil || len(w.Events) != 0 {
+	if err != nil || w.Name != "Neu" || w.Headers == nil || len(w.Events) != 0 || w.LastError != "" || w.LastSentAt != nil {
 		t.Fatalf("update: %v %+v", err, w)
 	}
 	if list, _ := s.ListWebhooks(ctx); len(list) != 1 {

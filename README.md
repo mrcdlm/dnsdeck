@@ -98,6 +98,12 @@ go vet ./... && go test ./...
 cd web && npm run lint && npm run build
 ```
 
+Browser-Tests (Playwright; starten Mock und Server selbst, frische Datenbank):
+
+```sh
+cd e2e && npm ci && npx playwright install chromium && npx playwright test
+```
+
 `npm run build` schreibt nach `web/dist/`; von dort wird das Frontend per
 `go:embed` ins Binary übernommen.
 
@@ -110,13 +116,17 @@ gleich: Methode, URL, Header und ein Body-Template (Go `text/template`).
 
 - Im Template: `.Type .Title .Message .Priority .Time .Data.<feld>` und die
   Funktionen `json` (für JSON-Werte, z. B. `{{json .Title}}`), `env`, `printf`,
-  `upper`, `lower`, `urlquery`. Leeres Template = Standard-JSON des Ereignisses.
+  `mul`, `upper`, `lower`, `urlquery`. Leeres Template = Standard-JSON des Ereignisses.
 - **Geheimnisse** (Tokens, geheime URLs) nie direkt eintragen, sondern in
   `deploy/.env` als `WEBHOOK_…` und im Webhook als `${WEBHOOK_NAME}` (URL, Header)
   bzw. `{{env "WEBHOOK_NAME"}}` (Body). In der Datenbank steht nur der Platzhalter.
 - Erlaubt sind nur Variablen mit Präfix `WEBHOOK_` – so kann über die Oberfläche
   z. B. `CF_API_TOKEN` nicht an einen fremden Server geschickt werden. Platzhalter
-  werden nur im konfigurierten Text ersetzt, nie in Ereignisdaten.
+  werden nur im konfigurierten Text ersetzt, nie in Ereignisdaten. Offensichtlich
+  direkt eingetragene Geheimnisse (z. B. `Authorization: Bearer …`, `?token=…`,
+  Discord-/Slack-/Telegram-URLs) werden beim Speichern abgelehnt.
+- Weiterleitungen werden nur auf denselben Host verfolgt (geheime Header gehen
+  nie an fremde Hosts).
 - Die Vorschau im Dialog zeigt die fertige Anfrage mit Beispielereignis, ohne
   Geheimnisse. „Testen“ schickt eine echte Testnachricht.
 
@@ -124,7 +134,8 @@ gleich: Methode, URL, Header und ein Body-Template (Go `text/template`).
 
 GitHub Actions (`.github/workflows/`):
 
-- **CI** bei jedem Push/PR: `gofmt`, `go vet`, `go test`, Frontend-Lint und -Build.
+- **CI** bei jedem Push/PR: `gofmt`, `go vet`, `go test`, Frontend-Lint und -Build,
+  Browser-Tests (Playwright).
 - **Release** bei Push auf `main`: Image `ghcr.io/mrcdlm/dnsdeck:main`.
 - **Release** bei Tag `vX.Y.Z`: Images `:X.Y.Z`, `:X.Y`, `:X`, `:latest` (amd64 + arm64)
   und ein GitHub-Release mit automatischen Release Notes.

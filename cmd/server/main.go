@@ -87,14 +87,15 @@ func run() error {
 
 	// Benachrichtigungen: Webhooks aus der DB; Geheimnisse als ${WEBHOOK_…}
 	// aus Env-Variablen.
+	broker := events.NewBroker()
 	dispatcher := notify.NewDispatcher(st, os.LookupEnv, log)
+	dispatcher.Pub = broker
 	for _, old := range []string{"NOTIFY_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_GOTIFY_URL"} {
 		if os.Getenv(old) != "" {
 			log.Warn(old + " wird nicht mehr unterstützt – Webhook unter Einstellungen anlegen (Vorlagen für ntfy, Gotify u. a.)")
 		}
 	}
 
-	broker := events.NewBroker()
 	tracker := ipdetect.NewTracker(newDetector(settings.Get().IPSources), st, log)
 	tracker.SetPublisher(broker)
 	tracker.Notifier = dispatcher

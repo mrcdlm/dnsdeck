@@ -30,3 +30,7 @@ web/dist/*
 .idea/
 .DS_Store
 Thumbs.db
+# Browser-Tests
+e2e/.tmp/
+e2e/test-results/
+e2e/playwright-report/

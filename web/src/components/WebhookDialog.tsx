@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { api, type NotifyEventType, type Webhook, type WebhookInput, type WebhookMethod, type WebhookPreview } from '@/lib/api'
 import { useSaveWebhook } from '@/lib/queries'
-import { contentTypes, eventInfo, eventTypes, presets } from '@/lib/webhooks'
+import { contentTypes, eventInfo, eventTypes, presets, webhookInput } from '@/lib/webhooks'
 
 interface Props {
   open: boolean
@@ -29,11 +29,7 @@ export function WebhookDialog({ open, onOpenChange, webhook }: Props) {
 }
 
 function toInput(w?: Webhook): WebhookInput {
-  if (!w) {
-    return { name: '', enabled: true, events: [...eventTypes], ...presets[0].webhook }
-  }
-  const { name, enabled, method, url, headers, content_type, body_template, events } = w
-  return { name, enabled, method, url, headers, content_type, body_template, events }
+  return w ? webhookInput(w) : { name: '', enabled: true, events: [...eventTypes], ...presets[0].webhook }
 }
 
 /** Vorschau mit Beispielereignis, verzögert nach der letzten Eingabe. */
@@ -73,7 +69,9 @@ function WebhookForm({ webhook, onDone }: { webhook?: Webhook; onDone: () => voi
     const p = presets.find((x) => x.id === id)
     if (!p) return
     setPresetId(id)
-    update({ ...p.webhook, name: w.name || p.label })
+    // Name mitwechseln, solange er leer ist oder noch einem Vorlagennamen entspricht
+    const keepName = w.name && !presets.some((x) => x.label === w.name)
+    update({ ...p.webhook, name: keepName ? w.name : p.label })
   }
 
   function submit(e: FormEvent) {
@@ -218,7 +216,7 @@ function WebhookForm({ webhook, onDone }: { webhook?: Webhook; onDone: () => voi
           <p className="text-muted-foreground text-xs">
             Verfügbar: <code className="font-mono">.Type .Title .Message .Priority .Time .Data.&lt;feld&gt;</code> ·
             Funktionen: <code className="font-mono">json</code> (für JSON-Werte), <code className="font-mono">env</code>,{' '}
-            <code className="font-mono">printf upper lower urlquery</code>
+            <code className="font-mono">printf mul upper lower urlquery</code>
           </p>
         </div>
       )}
