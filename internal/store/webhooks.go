@@ -49,13 +49,22 @@ func (s *Store) CreateWebhook(ctx context.Context, w Webhook) (Webhook, error) {
 	return s.GetWebhook(ctx, id)
 }
 
-// UpdateWebhook ändert die Konfiguration; der letzte Zustellstatus wird
-// zurückgesetzt, weil er sich auf die alte Konfiguration bezog.
+// UpdateWebhook ändert die Konfiguration. Ändert sich, was gesendet wird
+// (Methode, URL, Header, Body), wird der letzte Zustellstatus zurückgesetzt –
+// er bezog sich auf die alte Konfiguration. Name, Aktiv-Schalter und
+// Ereignisauswahl lassen ihn unberührt.
 func (s *Store) UpdateWebhook(ctx context.Context, w Webhook) (Webhook, error) {
 	headers, events := marshalWebhookLists(w)
+	// SET-Ausdrücke sehen die alten Spaltenwerte.
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE webhooks SET name = ?, enabled = ?, method = ?, url = ?, headers = ?, content_type = ?,
-			body_template = ?, events = ?, last_error = NULL, updated_at = ? WHERE id = ?`,
+		`UPDATE webhooks SET
+			last_error   = CASE WHEN method <> ?3 OR url <> ?4 OR headers <> ?5 OR content_type <> ?6 OR body_template <> ?7
+			               THEN NULL ELSE last_error END,
+			last_sent_at = CASE WHEN method <> ?3 OR url <> ?4 OR headers <> ?5 OR content_type <> ?6 OR body_template <> ?7
+			               THEN NULL ELSE last_sent_at END,
+			name = ?1, enabled = ?2, method = ?3, url = ?4, headers = ?5, content_type = ?6,
+			body_template = ?7, events = ?8, updated_at = ?9
+		 WHERE id = ?10`,
 		w.Name, w.Enabled, w.Method, w.URL, headers, w.ContentType, w.BodyTemplate, events,
 		formatTime(time.Now()), w.ID)
 	if err != nil {

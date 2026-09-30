@@ -1,4 +1,4 @@
-import type { NotifyEventType, WebhookInput } from './api'
+import type { NotifyEventType, Webhook, WebhookInput } from './api'
 
 export const eventInfo: Record<NotifyEventType, { label: string; hint: string }> = {
   ip_change: { label: 'IP-Wechsel', hint: 'Die öffentliche IPv4 oder IPv6 hat sich geändert.' },
@@ -57,10 +57,11 @@ export const presets: Preset[] = [
       url: 'https://gotify.example.com/message',
       headers: [{ name: 'X-Gotify-Key', value: '${WEBHOOK_GOTIFY_TOKEN}' }],
       content_type: json,
+      // Gotify-Skala 0–10 (dnsdeck: 2–4)
       body_template: `{
   "title": {{json .Title}},
   "message": {{json .Message}},
-  "priority": {{.Priority}}
+  "priority": {{mul .Priority 2}}
 }`,
     },
   },
@@ -119,5 +120,11 @@ export const presets: Preset[] = [
     },
   },
 ]
+
+/** Bearbeitbare Felder eines gespeicherten Webhooks. */
+export function webhookInput(w: Webhook): WebhookInput {
+  const { name, enabled, method, url, headers, content_type, body_template, events } = w
+  return { name, enabled, method, url, headers, content_type, body_template, events }
+}
 
 export const contentTypes = ['application/json', 'text/plain; charset=utf-8', 'application/x-www-form-urlencoded']

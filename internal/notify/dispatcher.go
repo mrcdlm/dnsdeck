@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -27,6 +28,8 @@ type webhookStore interface {
 // Eine volle Warteschlange verwirft Ereignisse, statt die Überwachung zu
 // blockieren.
 type Dispatcher struct {
+	// Pub wird nach Zustellungen informiert, damit die UI den Status live zeigt.
+	Pub     events.Publisher
 	store   webhookStore
 	env     Env
 	log     *slog.Logger
@@ -39,7 +42,17 @@ type Dispatcher struct {
 
 func NewDispatcher(st webhookStore, env Env, log *slog.Logger) *Dispatcher {
 	return &Dispatcher{store: st, env: env, log: log,
-		client:  &http.Client{Timeout: 15 * time.Second},
+		client: &http.Client{
+			Timeout: 15 * time.Second,
+			// Weiterleitungen nur auf denselben Host: Go entfernt bei fremden
+			// Hosts nur Authorization/Cookie, nicht z. B. X-Gotify-Key.
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 5 || req.URL.Host != via[0].URL.Host {
+					return http.ErrUseLastResponse
+				}
+				return nil
+			},
+		},
 		queue:   make(chan Event, 100),
 		retries: 3, backoff: 5 * time.Second}
 }
@@ -81,20 +94,30 @@ func (d *Dispatcher) dispatch(ctx context.Context, ev Event) {
 		d.log.Error("Webhooks lesen fehlgeschlagen", "err", err)
 		return
 	}
+	// Parallel zustellen: ein hängender Webhook darf die anderen nicht aufhalten.
+	var wg sync.WaitGroup
+	delivered := false
 	for _, w := range hooks {
 		if !w.Enabled || !slices.Contains(w.Events, ev.Type) {
 			continue
 		}
-		err := d.deliver(ctx, w, ev, d.retries)
-		if ctx.Err() != nil {
-			return
-		}
-		if err != nil {
-			d.log.Warn("Webhook fehlgeschlagen", "webhook", w.Name, "type", ev.Type, "err", err)
-		}
-		if err := d.store.SetWebhookResult(ctx, w.ID, time.Now(), err); err != nil {
-			d.log.Error("Webhook-Status speichern fehlgeschlagen", "err", err)
-		}
+		delivered = true
+		wg.Go(func() {
+			err := d.deliver(ctx, w, ev, d.retries)
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				d.log.Warn("Webhook fehlgeschlagen", "webhook", w.Name, "type", ev.Type, "err", err)
+			}
+			if err := d.store.SetWebhookResult(ctx, w.ID, time.Now(), err); err != nil {
+				d.log.Error("Webhook-Status speichern fehlgeschlagen", "err", err)
+			}
+		})
+	}
+	wg.Wait()
+	if delivered {
+		events.Publish(d.Pub, events.TopicWebhooks)
 	}
 }
 
@@ -149,7 +172,10 @@ func (d *Dispatcher) send(ctx context.Context, r Request) error {
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
-	if resp.StatusCode >= 300 {
+	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+		return fmt.Errorf("HTTP %d – Weiterleitung auf einen anderen Host wird aus Sicherheitsgründen nicht verfolgt", resp.StatusCode)
+	}
+	if resp.StatusCode >= 400 {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	return nil

@@ -230,7 +230,7 @@ func (s *Server) handleIP(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleIPRefresh(w http.ResponseWriter, r *http.Request) {
 	// IP prüfen und alle Einträge abgleichen; auch dann zu Ende führen, wenn der Browser die Verbindung schließt.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 30*time.Second)
+	ctx, cancel := detached(r)
 	defer cancel()
 	state, err := s.ddns.RunCycle(ctx, store.TriggerManual)
 	if err != nil {
