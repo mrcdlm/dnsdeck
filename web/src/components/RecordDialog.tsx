@@ -1,5 +1,7 @@
+import type { TFunction } from 'i18next'
 import { Loader2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +22,15 @@ import { subdomainOf, ttlOptions } from '@/lib/records'
 
 type TypeChoice = RecordType | 'both'
 
+/** Beschriftung einer TTL-Option, z. B. "5 Minuten" / "5 minutes". */
+function ttlLabel(t: TFunction, ttl: number): string {
+  if (ttl === 1) return t('ttl.auto')
+  if (ttl % 86400 === 0) return t('ttl.days', { count: ttl / 86400 })
+  if (ttl % 3600 === 0) return t('ttl.hours', { count: ttl / 3600 })
+  if (ttl % 60 === 0) return t('ttl.minutes', { count: ttl / 60 })
+  return t('ttl.seconds', { count: ttl })
+}
+
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -39,6 +50,7 @@ export function RecordDialog({ open, onOpenChange, record }: Props) {
 }
 
 function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void }) {
+  const { t } = useTranslation()
   const zones = useZones()
   const save = useSaveRecord()
   const editing = record !== undefined
@@ -63,13 +75,13 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
     setError(undefined)
     const types: RecordType[] = type === 'both' ? ['A', 'AAAA'] : [type]
     try {
-      for (const t of types) {
+      for (const rt of types) {
         await save.mutateAsync({
           id: record?.id,
-          input: { zone_id: zone.id, name: fqdn, type: t, proxied, ttl: proxied ? 1 : ttl, enabled },
+          input: { zone_id: zone.id, name: fqdn, type: rt, proxied, ttl: proxied ? 1 : ttl, enabled },
         })
         // Scheitert danach AAAA, legt ein erneuter Versuch nur noch AAAA an.
-        if (type === 'both' && t === 'A') setType('AAAA')
+        if (type === 'both' && rt === 'A') setType('AAAA')
       }
       onDone()
     } catch (err) {
@@ -80,25 +92,21 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
   return (
     <form onSubmit={submit} className="flex flex-col gap-5">
       <DialogHeader>
-        <DialogTitle>{editing ? 'Record bearbeiten' : 'Record hinzufügen'}</DialogTitle>
-        <DialogDescription>
-          {editing
-            ? 'Geänderte Proxy-/TTL-Werte werden sofort zu Cloudflare übertragen.'
-            : 'Fehlt der Eintrag bei Cloudflare, wird er mit diesen Werten angelegt. Existiert er bereits, übernimmt dnsdeck Proxy und TTL von Cloudflare und ändert nur die IP.'}
-        </DialogDescription>
+        <DialogTitle>{editing ? t('recordDialog.editTitle') : t('recordDialog.addTitle')}</DialogTitle>
+        <DialogDescription>{editing ? t('recordDialog.editHint') : t('recordDialog.addHint')}</DialogDescription>
       </DialogHeader>
 
       {zones.isError && (
         <p className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border p-3 text-sm">
-          Zonen konnten nicht geladen werden: {zones.error.message}
+          {t('recordDialog.zonesError', { error: zones.error.message })}
         </p>
       )}
 
       <div className="grid gap-2">
-        <Label htmlFor="zone">Zone</Label>
+        <Label htmlFor="zone">{t('recordDialog.zone')}</Label>
         <Select value={effectiveZoneId} onValueChange={setZoneId} disabled={!zones.data?.length}>
-          <SelectTrigger id="zone" aria-label="Zone">
-            <SelectValue placeholder={zones.isPending ? 'Lade Zonen …' : 'Zone wählen'} />
+          <SelectTrigger id="zone" aria-label={t('recordDialog.zone')}>
+            <SelectValue placeholder={zones.isPending ? t('recordDialog.zonesLoading') : t('recordDialog.zonePick')} />
           </SelectTrigger>
           <SelectContent>
             {zones.data?.map((z) => (
@@ -111,11 +119,11 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="sub">Name</Label>
+        <Label htmlFor="sub">{t('recordDialog.name')}</Label>
         <div className="flex items-center gap-2">
           <Input
             id="sub"
-            placeholder="z. B. home (leer = Zone selbst)"
+            placeholder={t('recordDialog.namePlaceholder')}
             value={sub}
             onChange={(e) => setSub(e.target.value)}
             autoComplete="off"
@@ -125,16 +133,16 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
         </div>
         {fqdn && (
           <p className="text-muted-foreground text-xs">
-            Vollständiger Name: <span className="text-foreground font-mono">{fqdn}</span>
+            {t('recordDialog.fqdn')} <span className="text-foreground font-mono">{fqdn}</span>
           </p>
         )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
-          <Label htmlFor="type">Typ</Label>
+          <Label htmlFor="type">{t('recordDialog.type')}</Label>
           <Select value={type} onValueChange={(v) => setType(v as TypeChoice)}>
-            <SelectTrigger id="type" aria-label="Typ">
+            <SelectTrigger id="type" aria-label={t('recordDialog.type')}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -151,9 +159,9 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {ttlOptions.map((o) => (
-                <SelectItem key={o.value} value={String(o.value)}>
-                  {o.label}
+              {ttlOptions.map((v) => (
+                <SelectItem key={v} value={String(v)}>
+                  {ttlLabel(t, v)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -164,17 +172,15 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-4">
           <div className="grid gap-1">
-            <Label htmlFor="proxied">Über Cloudflare proxien</Label>
-            <p className="text-muted-foreground text-xs">
-              Orange Wolke: Verkehr läuft über Cloudflare, die TTL ist dann automatisch.
-            </p>
+            <Label htmlFor="proxied">{t('recordDialog.proxied')}</Label>
+            <p className="text-muted-foreground text-xs">{t('recordDialog.proxiedHint')}</p>
           </div>
           <Switch id="proxied" checked={proxied} onCheckedChange={setProxied} />
         </div>
         <div className="flex items-start justify-between gap-4">
           <div className="grid gap-1">
-            <Label htmlFor="enabled">Automatisch aktualisieren</Label>
-            <p className="text-muted-foreground text-xs">Deaktiviert: Eintrag bleibt verwaltet, wird aber nicht geändert.</p>
+            <Label htmlFor="enabled">{t('recordDialog.enabled')}</Label>
+            <p className="text-muted-foreground text-xs">{t('recordDialog.enabledHint')}</p>
           </div>
           <Switch id="enabled" checked={enabled} onCheckedChange={setEnabled} />
         </div>
@@ -188,11 +194,11 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>
-          Abbrechen
+          {t('common.cancel')}
         </Button>
         <Button type="submit" disabled={!zone || save.isPending}>
           {save.isPending && <Loader2 className="animate-spin" />}
-          {editing ? 'Speichern' : 'Hinzufügen'}
+          {editing ? t('common.save') : t('common.add')}
         </Button>
       </DialogFooter>
     </form>

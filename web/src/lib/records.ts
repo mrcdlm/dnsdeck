@@ -1,15 +1,7 @@
 import type { RecordStatus, UpdateResult, UpdateTrigger } from './api'
 
-export const ttlOptions: { value: number; label: string }[] = [
-  { value: 1, label: 'Automatisch' },
-  { value: 60, label: '1 Minute' },
-  { value: 120, label: '2 Minuten' },
-  { value: 300, label: '5 Minuten' },
-  { value: 600, label: '10 Minuten' },
-  { value: 1800, label: '30 Minuten' },
-  { value: 3600, label: '1 Stunde' },
-  { value: 86400, label: '1 Tag' },
-]
+/** TTL-Auswahl in Sekunden (1 = automatisch); Beschriftung über ttlLabel. */
+export const ttlOptions = [1, 60, 120, 300, 600, 1800, 3600, 86400]
 
 export function formatTTL(ttl: number): string {
   if (ttl === 1) return 'Auto'
@@ -21,27 +13,25 @@ export function formatTTL(ttl: number): string {
 
 type BadgeVariant = 'success' | 'warning' | 'destructive' | 'secondary' | 'outline'
 
-export const recordStatus: Record<RecordStatus, { label: string; variant: BadgeVariant }> = {
-  ok: { label: 'Aktuell', variant: 'success' },
-  error: { label: 'Fehler', variant: 'destructive' },
-  pending: { label: 'Ausstehend', variant: 'secondary' },
-  skipped: { label: 'Übersprungen', variant: 'warning' },
-  paused: { label: 'Pausiert', variant: 'outline' },
+// Beschriftungen: record.status.*, update.result.*, update.trigger.* (locales)
+export const recordStatusVariant: Record<RecordStatus, BadgeVariant> = {
+  ok: 'success',
+  error: 'destructive',
+  pending: 'secondary',
+  skipped: 'warning',
+  paused: 'outline',
 }
 
-export const updateResult: Record<UpdateResult, { label: string; variant: BadgeVariant }> = {
-  created: { label: 'Angelegt', variant: 'success' },
-  adopted: { label: 'Übernommen', variant: 'secondary' },
-  updated: { label: 'Aktualisiert', variant: 'success' },
-  recovered: { label: 'Behoben', variant: 'success' },
-  error: { label: 'Fehler', variant: 'destructive' },
+export const updateResultVariant: Record<UpdateResult, BadgeVariant> = {
+  created: 'success',
+  adopted: 'secondary',
+  updated: 'success',
+  recovered: 'success',
+  error: 'destructive',
 }
 
-export const updateTrigger: Record<UpdateTrigger, string> = {
-  scheduled: 'automatisch',
-  manual: 'manuell',
-  record_saved: 'nach Speichern',
-}
+export const updateResults: UpdateResult[] = ['created', 'adopted', 'updated', 'recovered', 'error']
+export type { UpdateTrigger }
 
 /** Teil des Namens vor der Zone ("" = Zone selbst). */
 export function subdomainOf(name: string, zone: string): string {

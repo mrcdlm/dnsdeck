@@ -1,3 +1,5 @@
+import { currentLang } from '@/i18n'
+
 export type Family = 'ipv4' | 'ipv6'
 export type IPStatus = 'ok' | 'unconfirmed' | 'unavailable' | 'pending'
 
@@ -143,6 +145,7 @@ export type NotifyEventType = 'ip_change' | 'update_failed' | 'update_recovered'
 export interface Settings {
   ip_check_interval_seconds: number
   tunnel_interval_seconds: number
+  notify_language: 'de' | 'en'
   ip_sources: { name: string; enabled: boolean }[]
   limits: Record<string, number>
 }
@@ -228,10 +231,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = { 'Accept-Language': currentLang() } // Server-Meldungen in UI-Sprache
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
   const res = await fetch(path, {
     method,
     credentials: 'same-origin',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (res.status === 204) return undefined as T

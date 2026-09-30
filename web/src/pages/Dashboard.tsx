@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowLeft, ChevronRight, Globe, ListTree, Network, RefreshCw } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 import { CopyButton } from '@/components/CopyButton'
@@ -16,6 +17,7 @@ import { cn } from '@/lib/utils'
 const familyLabel: Record<Family, string> = { ipv4: 'IPv4', ipv6: 'IPv6' }
 
 function FamilyPanel({ family, state, now }: { family: Family; state: FamilyState; now: number }) {
+  const { t } = useTranslation()
   const label = familyLabel[family]
   const failed = state.sources.filter((s) => s.error)
 
@@ -36,7 +38,7 @@ function FamilyPanel({ family, state, now }: { family: Family; state: FamilyStat
           >
             {state.ip}
           </span>
-          <CopyButton value={state.ip} label={`${label}-Adresse kopieren`} />
+          <CopyButton value={state.ip} label={t('ip.copy', { family: label })} />
         </div>
       ) : (
         <span className="text-muted-foreground text-2xl font-semibold">—</span>
@@ -45,14 +47,10 @@ function FamilyPanel({ family, state, now }: { family: Family; state: FamilyStat
       <div className="text-muted-foreground flex flex-col gap-1 text-sm">
         {state.since && (
           <span title={absoluteTime(state.since)}>
-            seit {absoluteTime(state.since)} ({relativeTime(state.since, now)})
+            {t('ip.since', { date: absoluteTime(state.since), relative: relativeTime(state.since, now) })}
           </span>
         )}
-        {state.responses > 0 && (
-          <span>
-            {state.votes} von {state.responses} Quellen einig
-          </span>
-        )}
+        {state.responses > 0 && <span>{t('ip.agreement', { votes: state.votes, count: state.responses })}</span>}
         {state.message && state.status !== 'ok' && (
           <span className={cn('flex items-center gap-1.5', state.status === 'unconfirmed' && 'text-warning')}>
             {state.status === 'unconfirmed' && <AlertTriangle className="size-3.5 shrink-0" />}
@@ -61,9 +59,7 @@ function FamilyPanel({ family, state, now }: { family: Family; state: FamilyStat
         )}
         {failed.length > 0 && state.status !== 'unavailable' && (
           <details className="text-xs">
-            <summary className="cursor-pointer select-none">
-              {failed.length} Quelle{failed.length > 1 ? 'n' : ''} nicht erreichbar
-            </summary>
+            <summary className="cursor-pointer select-none">{t('ip.sourcesFailed', { count: failed.length })}</summary>
             <ul className="mt-1 flex flex-col gap-0.5">
               {failed.map((s) => (
                 <li key={s.source} className="break-all">
@@ -79,6 +75,7 @@ function FamilyPanel({ family, state, now }: { family: Family; state: FamilyStat
 }
 
 function IPCard() {
+  const { t } = useTranslation()
   const ip = useIP()
   const refresh = useRefreshIP()
   const now = useNow()
@@ -88,15 +85,15 @@ function IPCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Globe className="size-5" />
-          Öffentliche IP
+          {t('ip.title')}
         </CardTitle>
         <CardDescription>
           {ip.data?.last_checked ? (
             <span title={absoluteTime(ip.data.last_checked)}>
-              Zuletzt geprüft {relativeTime(ip.data.last_checked, now)}
+              {t('ip.lastChecked', { time: relativeTime(ip.data.last_checked, now) })}
             </span>
           ) : (
-            'Noch nicht geprüft'
+            t('ip.notChecked')
           )}
         </CardDescription>
         <CardAction>
@@ -104,18 +101,18 @@ function IPCard() {
             variant="outline"
             onClick={() => refresh.mutate()}
             disabled={refresh.isPending}
-            aria-label="Jetzt aktualisieren"
-            title="IP prüfen und alle Records abgleichen"
+            aria-label={t('common.refreshNow')}
+            title={t('ip.refreshHint')}
           >
             <RefreshCw className={cn(refresh.isPending && 'animate-spin')} />
-            <span className="hidden sm:inline">Jetzt aktualisieren</span>
+            <span className="hidden sm:inline">{t('common.refreshNow')}</span>
           </Button>
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {refresh.isError && (
           <p className="text-destructive text-sm" role="alert">
-            Aktualisierung fehlgeschlagen: {refresh.error.message}
+            {t('common.refreshFailed', { error: refresh.error.message })}
           </p>
         )}
         {ip.isPending ? (
@@ -124,7 +121,7 @@ function IPCard() {
             <Skeleton className="h-36" />
           </div>
         ) : ip.isError ? (
-          <p className="text-destructive text-sm">IP-Status konnte nicht geladen werden: {ip.error.message}</p>
+          <p className="text-destructive text-sm">{t('ip.loadError', { error: ip.error.message })}</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             <FamilyPanel family="ipv4" state={ip.data.ipv4} now={now} />
@@ -137,14 +134,15 @@ function IPCard() {
 }
 
 function IPChangesCard() {
+  const { t } = useTranslation()
   const history = useIPHistory(10)
   const now = useNow()
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Letzte IP-Wechsel</CardTitle>
-        <CardDescription>Die zehn jüngsten Änderungen der öffentlichen Adressen</CardDescription>
+        <CardTitle className="text-lg">{t('dashboard.ipChanges')}</CardTitle>
+        <CardDescription>{t('dashboard.ipChangesHint')}</CardDescription>
       </CardHeader>
       <CardContent>
         {history.isPending ? (
@@ -154,9 +152,9 @@ function IPChangesCard() {
             <Skeleton className="h-10" />
           </div>
         ) : history.isError ? (
-          <p className="text-destructive text-sm">Verlauf konnte nicht geladen werden: {history.error.message}</p>
+          <p className="text-destructive text-sm">{t('history.loadError', { error: history.error.message })}</p>
         ) : history.data.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Noch keine IP-Wechsel protokolliert.</p>
+          <p className="text-muted-foreground text-sm">{t('dashboard.ipChangesEmpty')}</p>
         ) : (
           <ul className="divide-y">
             {history.data.map((c) => (
@@ -184,6 +182,7 @@ function IPChangesCard() {
 }
 
 function RecordsTile() {
+  const { t } = useTranslation()
   const records = useRecords()
   const counts = { ok: 0, error: 0, other: 0 }
   for (const r of records.data ?? []) {
@@ -202,17 +201,17 @@ function RecordsTile() {
         <ListTree className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-muted-foreground text-sm">DNS-Records</div>
+        <div className="text-muted-foreground text-sm">{t('dashboard.records')}</div>
         {records.isPending ? (
           <Skeleton className="mt-1 h-6 w-32" />
         ) : total === 0 ? (
-          <div className="font-medium">Noch keine Records</div>
+          <div className="font-medium">{t('dashboard.noRecords')}</div>
         ) : (
           <div className="flex flex-wrap items-center gap-2 font-medium">
-            <span>{total} verwaltet</span>
-            {counts.ok > 0 && <Badge variant="success">{counts.ok} aktuell</Badge>}
-            {counts.error > 0 && <Badge variant="destructive">{counts.error} Fehler</Badge>}
-            {counts.other > 0 && <Badge variant="secondary">{counts.other} sonstige</Badge>}
+            <span>{t('dashboard.managed', { count: total })}</span>
+            {counts.ok > 0 && <Badge variant="success">{t('dashboard.upToDate', { count: counts.ok })}</Badge>}
+            {counts.error > 0 && <Badge variant="destructive">{t('dashboard.errors', { count: counts.error })}</Badge>}
+            {counts.other > 0 && <Badge variant="secondary">{t('dashboard.other', { count: counts.other })}</Badge>}
           </div>
         )}
       </div>
@@ -222,12 +221,13 @@ function RecordsTile() {
 }
 
 function TunnelsTile() {
+  const { t } = useTranslation()
   const tunnels = useTunnels()
   const o = tunnels.data
   const counts = { up: 0, degraded: 0, down: 0 }
-  for (const t of o?.tunnels ?? []) {
-    if (t.status === 'healthy') counts.up++
-    else if (t.status === 'degraded') counts.degraded++
+  for (const tn of o?.tunnels ?? []) {
+    if (tn.status === 'healthy') counts.up++
+    else if (tn.status === 'degraded') counts.degraded++
     else counts.down++
   }
   const total = o?.tunnels.length ?? 0
@@ -241,22 +241,24 @@ function TunnelsTile() {
         <Network className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-muted-foreground text-sm">Cloudflare Tunnels</div>
+        <div className="text-muted-foreground text-sm">{t('dashboard.tunnels')}</div>
         {tunnels.isPending ? (
           <Skeleton className="mt-1 h-6 w-32" />
         ) : !o?.configured ? (
-          <div className="text-muted-foreground font-medium">Nicht konfiguriert</div>
+          <div className="text-muted-foreground font-medium">{t('dashboard.notConfigured')}</div>
         ) : total === 0 ? (
-          <div className="font-medium">Keine Tunnels</div>
+          <div className="font-medium">{t('dashboard.noTunnels')}</div>
         ) : (
           <div className="flex flex-wrap items-center gap-2 font-medium">
-            <span>{total} überwacht</span>
-            {counts.up > 0 && <Badge variant="success">{counts.up} verbunden</Badge>}
-            {counts.degraded > 0 && <Badge variant="warning">{counts.degraded} eingeschränkt</Badge>}
-            {counts.down > 0 && <Badge variant="destructive">{counts.down} getrennt/inaktiv</Badge>}
+            <span>{t('dashboard.monitored', { count: total })}</span>
+            {counts.up > 0 && <Badge variant="success">{t('dashboard.connected', { count: counts.up })}</Badge>}
+            {counts.degraded > 0 && (
+              <Badge variant="warning">{t('dashboard.degraded', { count: counts.degraded })}</Badge>
+            )}
+            {counts.down > 0 && <Badge variant="destructive">{t('dashboard.down', { count: counts.down })}</Badge>}
           </div>
         )}
-        {o?.error && <div className="text-destructive mt-1 text-xs">Letzte Abfrage fehlgeschlagen</div>}
+        {o?.error && <div className="text-destructive mt-1 text-xs">{t('tunnels.lastPollFailedShort')}</div>}
       </div>
       <ChevronRight className="text-muted-foreground size-4 transition-transform group-hover:translate-x-0.5" />
     </Link>
@@ -264,11 +266,12 @@ function TunnelsTile() {
 }
 
 export function Dashboard() {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground text-sm">Öffentliche Adressen, DNS-Records und letzte Änderungen</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('nav.dashboard')}</h1>
+        <p className="text-muted-foreground text-sm">{t('dashboard.subtitle')}</p>
       </div>
       <IPCard />
       <div className="grid gap-4 md:grid-cols-2">
@@ -279,8 +282,8 @@ export function Dashboard() {
         <IPChangesCard />
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Letzte DNS-Updates</CardTitle>
-            <CardDescription>Änderungen an den verwalteten Records</CardDescription>
+            <CardTitle className="text-lg">{t('dashboard.dnsUpdates')}</CardTitle>
+            <CardDescription>{t('dashboard.dnsUpdatesHint')}</CardDescription>
           </CardHeader>
           <CardContent>
             <UpdateLogList limit={5} />

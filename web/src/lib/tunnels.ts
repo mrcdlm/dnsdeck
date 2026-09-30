@@ -1,12 +1,19 @@
 import type { BucketStatus, Tunnel, TunnelStatus } from './api'
+import { formatNumber } from './format'
 
 type BadgeVariant = 'success' | 'warning' | 'destructive' | 'secondary'
 
-export const tunnelStatus: Record<TunnelStatus, { label: string; variant: BadgeVariant; hint: string }> = {
-  healthy: { label: 'Verbunden', variant: 'success', hint: 'healthy – alle Verbindungen aktiv' },
-  degraded: { label: 'Eingeschränkt', variant: 'warning', hint: 'degraded – nicht alle Verbindungen aktiv' },
-  down: { label: 'Getrennt', variant: 'destructive', hint: 'down – keine aktive Verbindung' },
-  inactive: { label: 'Inaktiv', variant: 'secondary', hint: 'inactive – noch nie verbunden' },
+// Beschriftungen: tunnel.status.*, tunnel.hint.*, tunnel.bucket.* (locales)
+export const tunnelStatusVariant: Record<TunnelStatus, BadgeVariant> = {
+  healthy: 'success',
+  degraded: 'warning',
+  down: 'destructive',
+  inactive: 'secondary',
+}
+
+/** Schlüssel für Balken-Stücke ('' = keine Daten). */
+export function bucketKey(b: BucketStatus) {
+  return b === '' ? 'none' : b
 }
 
 export const bucketColor: Record<BucketStatus, string> = {
@@ -17,19 +24,11 @@ export const bucketColor: Record<BucketStatus, string> = {
   '': 'bg-muted',
 }
 
-export const bucketLabel: Record<BucketStatus, string> = {
-  healthy: 'verbunden',
-  degraded: 'eingeschränkt',
-  down: 'getrennt',
-  inactive: 'inaktiv',
-  '': 'keine Daten',
-}
-
 export function formatPercent(p: number | null): string {
   if (p === null) return '—'
   // 99,95 % soll nicht als 100 % erscheinen
   const v = p >= 99.995 ? 100 : Math.floor(p * 100) / 100
-  return `${v.toLocaleString('de-DE', { maximumFractionDigits: 2 })} %`
+  return `${formatNumber(v)} %`
 }
 
 /** Eindeutige Rechenzentren (Colos) der aktiven Verbindungen, z. B. ["FRA06", "AMS01"]. */

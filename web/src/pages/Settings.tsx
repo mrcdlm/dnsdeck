@@ -1,13 +1,23 @@
-import { AlertTriangle, ArrowDown, ArrowUp, Check, Info as InfoIcon, Loader2, Pencil, Plus, Send, Timer, Trash2, Wifi, X } from 'lucide-react'
+import type { TFunction } from 'i18next'
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  Bell,
+  Check,
+  Info as InfoIcon,
+  Loader2,
+  Pencil,
+  Plus,
+  Send,
+  Timer,
+  Trash2,
+  Wifi,
+  X,
+} from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
 import { WebhookDialog } from '@/components/WebhookDialog'
 import {
   AlertDialog,
@@ -19,6 +29,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import type { Settings as SettingsData, Webhook } from '@/lib/api'
 import { absoluteTime, relativeTime, useNow } from '@/lib/format'
 import {
@@ -30,7 +47,7 @@ import {
   useTestWebhook,
   useWebhooks,
 } from '@/lib/queries'
-import { eventInfo, webhookInput } from '@/lib/webhooks'
+import { webhookInput } from '@/lib/webhooks'
 
 const ipIntervals = [60, 120, 300, 600, 900, 1800, 3600]
 const tunnelIntervals = [30, 60, 120, 300, 600]
@@ -41,10 +58,10 @@ const sourceInfo: Record<string, string> = {
   icanhazip: 'icanhazip.com',
 }
 
-function formatSeconds(s: number): string {
-  if (s % 3600 === 0) return s === 3600 ? '1 Stunde' : `${s / 3600} Stunden`
-  if (s % 60 === 0) return s === 60 ? '1 Minute' : `${s / 60} Minuten`
-  return `${s} Sekunden`
+function formatSeconds(t: TFunction, s: number): string {
+  if (s % 3600 === 0) return t('interval.hours', { count: s / 3600 })
+  if (s % 60 === 0) return t('interval.minutes', { count: s / 60 })
+  return t('interval.seconds', { count: s })
 }
 
 function IntervalSelect({
@@ -58,6 +75,7 @@ function IntervalSelect({
   presets: number[]
   onChange: (v: number) => void
 }) {
+  const { t } = useTranslation()
   // Ein gespeicherter Wert außerhalb der Vorgaben bleibt wählbar.
   const options = presets.includes(value) ? presets : [...presets, value].sort((a, b) => a - b)
   return (
@@ -68,7 +86,7 @@ function IntervalSelect({
       <SelectContent>
         {options.map((s) => (
           <SelectItem key={s} value={String(s)}>
-            {formatSeconds(s)}
+            {formatSeconds(t, s)}
           </SelectItem>
         ))}
       </SelectContent>
@@ -76,7 +94,17 @@ function IntervalSelect({
   )
 }
 
-function Section({ icon, title, description, children }: { icon: ReactNode; title: string; description: string; children: ReactNode }) {
+function Section({
+  icon,
+  title,
+  description,
+  children,
+}: {
+  icon: ReactNode
+  title: string
+  description: string
+  children: ReactNode
+}) {
   return (
     <Card>
       <CardHeader>
@@ -91,6 +119,18 @@ function Section({ icon, title, description, children }: { icon: ReactNode; titl
   )
 }
 
+function SettingRow({ id, label, hint, children }: { id: string; label: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="grid gap-1">
+        <Label htmlFor={id}>{label}</Label>
+        <p className="text-muted-foreground text-xs">{hint}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
 // saved liegt beim Aufrufer: das Formular wird nach dem Speichern mit den neuen
 // Werten neu aufgebaut (key) und verlöre sonst die Bestätigung.
 function SettingsForm({
@@ -102,6 +142,7 @@ function SettingsForm({
   saved: boolean
   setSaved: (v: boolean) => void
 }) {
+  const { t } = useTranslation()
   const save = useSaveSettings()
   const [draft, setDraft] = useState(initial)
   const dirty = JSON.stringify(draft) !== JSON.stringify(initial)
@@ -129,37 +170,29 @@ function SettingsForm({
         save.mutate(draft, { onSuccess: (s) => (setDraft(s), setSaved(true)) })
       }}
     >
-      <Section icon={<Timer className="size-5" />} title="Intervalle" description="Änderungen gelten sofort, ohne Neustart.">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="grid gap-1">
-            <Label htmlFor="ip-interval">IP prüfen und DNS abgleichen</Label>
-            <p className="text-muted-foreground text-xs">So lange zeigt ein Record nach einem IP-Wechsel höchstens auf die alte IP.</p>
-          </div>
+      <Section icon={<Timer className="size-5" />} title={t('settings.intervals')} description={t('settings.intervalsHint')}>
+        <SettingRow id="ip-interval" label={t('settings.ipInterval')} hint={t('settings.ipIntervalHint')}>
           <IntervalSelect
             id="ip-interval"
             value={draft.ip_check_interval_seconds}
             presets={ipIntervals}
             onChange={(v) => update({ ip_check_interval_seconds: v })}
           />
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="grid gap-1">
-            <Label htmlFor="tunnel-interval">Tunnels abfragen</Label>
-            <p className="text-muted-foreground text-xs">Bestimmt, wie schnell ein Tunnel-Ausfall erkannt wird.</p>
-          </div>
+        </SettingRow>
+        <SettingRow id="tunnel-interval" label={t('settings.tunnelInterval')} hint={t('settings.tunnelIntervalHint')}>
           <IntervalSelect
             id="tunnel-interval"
             value={draft.tunnel_interval_seconds}
             presets={tunnelIntervals}
             onChange={(v) => update({ tunnel_interval_seconds: v })}
           />
-        </div>
+        </SettingRow>
       </Section>
 
       <Section
         icon={<Wifi className="size-5" />}
-        title="IP-Quellen"
-        description={`Die öffentliche IP gilt erst, wenn die Mehrheit der Quellen übereinstimmt. Mindestens ${minSources} aktivieren, empfohlen: alle.`}
+        title={t('settings.sources')}
+        description={t('settings.sourcesHint', { min: minSources })}
       >
         <ul className="divide-y rounded-md border">
           {draft.ip_sources.map((s, i) => (
@@ -174,14 +207,21 @@ function SettingsForm({
               <Label htmlFor={`src-${s.name}`} className="min-w-0 flex-1 font-normal">
                 {sourceInfo[s.name] ?? s.name}
               </Label>
-              <Button type="button" variant="ghost" size="icon" aria-label={`${s.name} nach oben`} disabled={i === 0} onClick={() => moveSource(i, -1)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={t('settings.moveUp', { name: s.name })}
+                disabled={i === 0}
+                onClick={() => moveSource(i, -1)}
+              >
                 <ArrowUp />
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label={`${s.name} nach unten`}
+                aria-label={t('settings.moveDown', { name: s.name })}
                 disabled={i === draft.ip_sources.length - 1}
                 onClick={() => moveSource(i, 1)}
               >
@@ -191,23 +231,49 @@ function SettingsForm({
           ))}
         </ul>
         {enabledSources < minSources && (
-          <p className="text-destructive text-sm">Mindestens {minSources} Quellen aktivieren.</p>
+          <p className="text-destructive text-sm">{t('settings.sourcesMin', { min: minSources })}</p>
         )}
       </Section>
 
+      <Section icon={<Bell className="size-5" />} title={t('settings.notifications')} description={t('settings.notificationsHint')}>
+        <SettingRow id="notify-language" label={t('settings.notifyLanguage')} hint={t('settings.notifyLanguageHint')}>
+          <Select
+            value={draft.notify_language}
+            onValueChange={(v) => update({ notify_language: v as SettingsData['notify_language'] })}
+          >
+            <SelectTrigger id="notify-language" className="w-full sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="de">{t('prefs.languageName.de')}</SelectItem>
+              <SelectItem value="en">{t('prefs.languageName.en')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      </Section>
+
       <div className="bg-background/90 sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-3 border-t px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
-        {save.isError && <p className="text-destructive mr-auto text-sm" role="alert">{save.error.message}</p>}
+        {save.isError && (
+          <p className="text-destructive mr-auto text-sm" role="alert">
+            {save.error.message}
+          </p>
+        )}
         {saved && !dirty && (
           <span className="text-success mr-auto flex items-center gap-1 text-sm">
-            <Check className="size-4" /> Gespeichert
+            <Check className="size-4" /> {t('settings.saved')}
           </span>
         )}
-        <Button type="button" variant="outline" disabled={!dirty || save.isPending} onClick={() => (setDraft(initial), setSaved(false))}>
-          Verwerfen
+        <Button
+          type="button"
+          variant="outline"
+          disabled={!dirty || save.isPending}
+          onClick={() => (setDraft(initial), setSaved(false))}
+        >
+          {t('settings.discard')}
         </Button>
         <Button type="submit" disabled={!dirty || save.isPending || enabledSources < minSources}>
           {save.isPending && <Loader2 className="animate-spin" />}
-          Speichern
+          {t('common.save')}
         </Button>
       </div>
     </form>
@@ -215,6 +281,7 @@ function SettingsForm({
 }
 
 function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: () => void; onDelete: () => void }) {
+  const { t } = useTranslation()
   const test = useTestWebhook()
   const save = useSaveWebhook()
   const now = useNow()
@@ -224,8 +291,8 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
   const { reset: resetTest, data: testData } = test
   useEffect(() => {
     if (!testData) return
-    const t = setTimeout(resetTest, 8000)
-    return () => clearTimeout(t)
+    const timer = setTimeout(resetTest, 8000)
+    return () => clearTimeout(timer)
   }, [testData, resetTest])
 
   return (
@@ -233,21 +300,33 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
       <div className="flex flex-wrap items-center gap-2">
         <Switch
           checked={webhook.enabled}
-          aria-label={`${webhook.name} aktiv`}
+          aria-label={t('webhooks.activeLabel', { name: webhook.name })}
           disabled={save.isPending}
           onCheckedChange={(on) => save.mutate({ id, input: { ...webhookInput(webhook), enabled: on } })}
         />
         <span className="font-medium">{webhook.name}</span>
-        {!webhook.enabled && <Badge variant="outline">inaktiv</Badge>}
+        {!webhook.enabled && <Badge variant="outline">{t('webhooks.inactive')}</Badge>}
         <div className="ml-auto flex gap-1">
           <Button type="button" variant="ghost" size="sm" onClick={() => test.mutate(id)} disabled={test.isPending}>
             {test.isPending ? <Loader2 className="animate-spin" /> : <Send />}
-            Testen
+            {t('webhooks.test')}
           </Button>
-          <Button type="button" variant="ghost" size="icon" aria-label={`${webhook.name} bearbeiten`} onClick={onEdit}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={t('webhooks.editLabel', { name: webhook.name })}
+            onClick={onEdit}
+          >
             <Pencil />
           </Button>
-          <Button type="button" variant="ghost" size="icon" aria-label={`${webhook.name} löschen`} onClick={onDelete}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={t('webhooks.deleteLabel', { name: webhook.name })}
+            onClick={onDelete}
+          >
             <Trash2 />
           </Button>
         </div>
@@ -257,11 +336,11 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
       </p>
       <div className="flex flex-wrap gap-1">
         {webhook.events.length === 0 ? (
-          <span className="text-warning text-xs">Kein Ereignis ausgewählt – sendet nur Testnachrichten</span>
+          <span className="text-warning text-xs">{t('webhooks.noEvents')}</span>
         ) : (
           webhook.events.map((e) => (
             <Badge key={e} variant="secondary">
-              {eventInfo[e].label}
+              {t(`events.${e}.label`)}
             </Badge>
           ))
         )}
@@ -270,21 +349,24 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
         <p className="text-warning flex items-start gap-1.5 text-xs">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
           <span>
-            Nicht gesetzt: <code className="font-mono">{missing_env.join(', ')}</code> – in deploy/.env eintragen und Container
-            neu starten.
+            <Trans
+              i18nKey="webhooks.missingEnv"
+              values={{ names: missing_env.join(', ') }}
+              components={{ code: <code className="font-mono" /> }}
+            />
           </span>
         </p>
       )}
       {save.isError && (
         <p className="text-destructive text-xs break-words" role="alert">
-          Speichern fehlgeschlagen: {save.error.message}
+          {t('webhooks.saveFailed', { error: save.error.message })}
         </p>
       )}
       <p className="text-xs">
         {test.data ? (
           test.data.ok ? (
             <span className="text-success flex items-center gap-1">
-              <Check className="size-3.5" /> Testnachricht zugestellt
+              <Check className="size-3.5" /> {t('webhooks.testDelivered')}
             </span>
           ) : (
             <span className="text-destructive flex items-center gap-1 break-words">
@@ -292,13 +374,13 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
             </span>
           )
         ) : last_error ? (
-          <span className="text-destructive break-words">Letzte Zustellung fehlgeschlagen: {last_error}</span>
+          <span className="text-destructive break-words">{t('webhooks.lastFailed', { error: last_error })}</span>
         ) : last_sent_at ? (
           <span className="text-muted-foreground" title={absoluteTime(last_sent_at)}>
-            Zuletzt zugestellt {relativeTime(last_sent_at, now)}
+            {t('webhooks.lastSent', { time: relativeTime(last_sent_at, now) })}
           </span>
         ) : (
-          <span className="text-muted-foreground">Noch nichts gesendet</span>
+          <span className="text-muted-foreground">{t('webhooks.nothingSent')}</span>
         )}
       </p>
     </li>
@@ -306,6 +388,7 @@ function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: 
 }
 
 function Webhooks() {
+  const { t } = useTranslation()
   const webhooks = useWebhooks()
   const del = useDeleteWebhook()
   const [dialog, setDialog] = useState<{ open: boolean; webhook?: Webhook }>({ open: false })
@@ -313,43 +396,45 @@ function Webhooks() {
   const list = webhooks.data ?? []
 
   return (
-    <Section
-      icon={<Send className="size-5" />}
-      title="Benachrichtigungen (Webhooks)"
-      description="Beliebige Dienste per HTTP-Anfrage benachrichtigen – Vorlagen für ntfy, Gotify, Discord, Slack, Telegram und Home Assistant."
-    >
+    <Section icon={<Send className="size-5" />} title={t('webhooks.title')} description={t('webhooks.subtitle')}>
       {webhooks.isPending ? (
         <Skeleton className="h-16" />
       ) : webhooks.isError ? (
-        <p className="text-destructive text-sm">Webhooks konnten nicht geladen werden: {webhooks.error.message}</p>
+        <p className="text-destructive text-sm">{t('webhooks.loadError', { error: webhooks.error.message })}</p>
       ) : list.length === 0 ? (
-        <p className="text-muted-foreground text-sm">Noch keine Webhooks.</p>
+        <p className="text-muted-foreground text-sm">{t('webhooks.empty')}</p>
       ) : (
         <ul className="divide-y rounded-md border">
           {list.map((w) => (
-            <WebhookCard key={w.id} webhook={w} onEdit={() => setDialog({ open: true, webhook: w })} onDelete={() => setToDelete(w)} />
+            <WebhookCard
+              key={w.id}
+              webhook={w}
+              onEdit={() => setDialog({ open: true, webhook: w })}
+              onDelete={() => setToDelete(w)}
+            />
           ))}
         </ul>
       )}
       <div>
         <Button type="button" variant="outline" onClick={() => setDialog({ open: true })}>
-          <Plus /> Webhook hinzufügen
+          <Plus /> {t('webhooks.add')}
         </Button>
       </div>
 
-      <WebhookDialog open={dialog.open} webhook={dialog.webhook} onOpenChange={(open) => setDialog((d) => ({ ...d, open }))} />
+      <WebhookDialog
+        open={dialog.open}
+        webhook={dialog.webhook}
+        onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
+      />
 
       <AlertDialog open={toDelete !== undefined} onOpenChange={(open) => !open && setToDelete(undefined)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Webhook löschen?</AlertDialogTitle>
-            <AlertDialogDescription>
-              „{toDelete?.name}“ wird gelöscht und erhält keine Benachrichtigungen mehr. Die Env-Variablen in deploy/.env
-              bleiben unverändert.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('webhooks.deleteTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('webhooks.deleteHint', { name: toDelete?.name })}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault()
@@ -357,7 +442,7 @@ function Webhooks() {
               }}
               disabled={del.isPending}
             >
-              Löschen
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -376,21 +461,23 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function SystemInfo() {
+  const { t } = useTranslation()
   const info = useInfo()
   const d = info.data
-  const missing = <span className="text-warning">fehlt</span>
+  const set = t('system.set')
+  const missing = <span className="text-warning">{t('system.missing')}</span>
   return (
-    <Section icon={<InfoIcon className="size-5" />} title="System" description="Zugangsdaten werden nie angezeigt, nur ob sie gesetzt sind.">
+    <Section icon={<InfoIcon className="size-5" />} title={t('system.title')} description={t('system.hint')}>
       {!d ? (
         <Skeleton className="h-20" />
       ) : (
         <dl className="grid gap-2 text-sm">
-          <InfoRow label="Version">
+          <InfoRow label={t('system.version')}>
             <span className="font-mono">{d.version}</span>
           </InfoRow>
-          <InfoRow label="Cloudflare-Token">{d.cf_token_set ? 'gesetzt' : missing}</InfoRow>
-          <InfoRow label="Cloudflare-Account-ID">{d.cf_account_set ? 'gesetzt' : missing}</InfoRow>
-          <InfoRow label="Datenverzeichnis">
+          <InfoRow label={t('system.cfToken')}>{d.cf_token_set ? set : missing}</InfoRow>
+          <InfoRow label={t('system.cfAccount')}>{d.cf_account_set ? set : missing}</InfoRow>
+          <InfoRow label={t('system.dataDir')}>
             <span className="font-mono">{d.data_dir}</span>
           </InfoRow>
         </dl>
@@ -400,19 +487,20 @@ function SystemInfo() {
 }
 
 export function Settings() {
+  const { t } = useTranslation()
   const settings = useSettings()
   const [saved, setSaved] = useState(false)
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Einstellungen</h1>
-        <p className="text-muted-foreground text-sm">Intervalle, IP-Quellen und Webhooks</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('nav.settings')}</h1>
+        <p className="text-muted-foreground text-sm">{t('settings.subtitle')}</p>
       </div>
       {settings.isPending ? (
         <Skeleton className="h-96" />
       ) : settings.isError ? (
-        <p className="text-destructive text-sm">Einstellungen konnten nicht geladen werden: {settings.error.message}</p>
+        <p className="text-destructive text-sm">{t('settings.loadError', { error: settings.error.message })}</p>
       ) : (
         // key: nach dem Speichern (oder Änderung in anderem Tab) neu initialisieren
         <SettingsForm key={JSON.stringify(settings.data)} initial={settings.data} saved={saved} setSaved={setSaved} />
