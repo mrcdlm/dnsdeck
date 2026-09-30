@@ -28,9 +28,6 @@ func TestSettingsService(t *testing.T) {
 	if len(warnings) != 1 || len(svc.Get().IPSources) != 2 {
 		t.Fatalf("warnings=%v sources=%v", warnings, svc.Get().IPSources)
 	}
-	if !svc.Get().NotifyEnabled("ip_change") {
-		t.Fatal("Default: Ereignisse eingeschaltet")
-	}
 
 	var called Settings
 	svc.OnChange(func(_, cur Settings) { called = cur })
@@ -39,21 +36,20 @@ func TestSettingsService(t *testing.T) {
 	next.IPCheckInterval = 2 * time.Minute
 	next.TunnelInterval = 30 * time.Second
 	next.IPSources = []string{"icanhazip", "cloudflare"}
-	next.NotifyEvents = map[string]bool{"ip_change": false}
 	got, err := svc.Update(ctx, next)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if called.IPCheckInterval != 2*time.Minute || got.NotifyEnabled("ip_change") || !got.NotifyEnabled("tunnel_status") {
+	if called.IPCheckInterval != 2*time.Minute || got.TunnelInterval != 30*time.Second {
 		t.Fatalf("got=%+v called=%+v", got, called)
 	}
-	if st[KeyIPCheckInterval] != "2m0s" || st[KeyIPSources] != "icanhazip,cloudflare" || st[KeyNotifyEvents] != `{"ip_change":false}` {
+	if st[KeyIPCheckInterval] != "2m0s" || st[KeyIPSources] != "icanhazip,cloudflare" {
 		t.Fatalf("gespeichert: %v", st)
 	}
 
 	// neu laden liefert denselben Stand
 	svc2, w := NewSettingsService(ctx, st, names)
-	if len(w) != 0 || svc2.Get().TunnelInterval != 30*time.Second || svc2.Get().NotifyEnabled("ip_change") {
+	if len(w) != 0 || svc2.Get().TunnelInterval != 30*time.Second {
 		t.Fatalf("neu geladen: %+v %v", svc2.Get(), w)
 	}
 

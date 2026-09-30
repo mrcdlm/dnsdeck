@@ -9,9 +9,9 @@ ein Go-Binary mit eingebettetem React-Frontend, ausgeliefert als ein Container.
   (nur bei Abweichung vom Ist-Zustand), Update-Protokoll
 - Tunnel-Monitoring: Status, Verbindungen, Colos, Uptime-Balken 24 h / 7 Tage
 - Live-Updates per Server-Sent Events (`/api/events`)
-- Benachrichtigungen per ntfy, Gotify oder Webhook (IP-Wechsel, DNS-Fehler und
-  -Erholung, Tunnel-Statuswechsel)
-- Verlauf (filterbar) und Einstellungen (Intervalle, IP-Quellen, Ereignisse –
+- Benachrichtigungen über frei konfigurierbare Webhooks (Methode, URL, Header,
+  Body-Template) – Vorlagen für ntfy, Gotify, Discord, Slack, Telegram, Home Assistant
+- Verlauf (filterbar) und Einstellungen (Intervalle, IP-Quellen, Webhooks –
   wirken ohne Neustart)
 - Dashboard, Records- und Tunnels-Seite, Login
 - CI/CD: GitHub Actions, Multi-Arch-Image (amd64 + arm64) auf ghcr.io, Release-Tags
@@ -42,9 +42,7 @@ Account → Cloudflare Tunnel → Read.
 | `APP_PASSWORD`  | ja      | Dashboard-Passwort (Klartext oder bcrypt-Hash)          |
 | `CF_API_TOKEN`  | für DDNS | Cloudflare-API-Token (Zone → DNS → Edit, Zone → Zone → Read) |
 | `CF_ACCOUNT_ID` | für Tunnels | Cloudflare-Account-ID; Token braucht zusätzlich Account → Cloudflare Tunnel → Read |
-| `NOTIFY_NTFY_URL` / `NOTIFY_NTFY_TOKEN` | nein | ntfy-Topic-URL, optional Access-Token |
-| `NOTIFY_GOTIFY_URL` / `NOTIFY_GOTIFY_TOKEN` | nein | Gotify-Server und App-Token |
-| `NOTIFY_WEBHOOK_URL` | nein | Webhook, erhält das Ereignis als JSON per POST |
+| `WEBHOOK_*`     | nein    | Geheimnisse für Webhooks (siehe unten)                  |
 | `PORT`          | nein    | HTTP-Port, Default `8080`                               |
 | `LOG_LEVEL`     | nein    | `debug`, `info`, `warn`, `error`; Default `info`        |
 | `DATA_DIR`      | nein    | Verzeichnis für `app.db`, Default `/data`               |
@@ -85,9 +83,7 @@ Hinweise zum Verhalten:
 - Tunnels werden alle 60 s abgefragt. Gespeichert werden Zeitabschnitte gleichen
   Status (30 Tage); Zeiten ohne Abfrage bleiben in der Uptime „unbekannt“.
   `degraded` zählt als erreichbar.
-- Benachrichtigungs-URLs und -Tokens gelten als Geheimnisse: nur per Env-Variable,
-  in der Oberfläche nur maskiert (Schema und Host). Ein dauerhafter DNS-Fehler wird
-  einmal gemeldet, seine Behebung ebenfalls.
+- Ein dauerhafter DNS-Fehler wird einmal gemeldet, seine Behebung ebenfalls.
 
 Lokal als Container (baut aus dem Quellcode):
 
@@ -104,6 +100,25 @@ cd web && npm run lint && npm run build
 
 `npm run build` schreibt nach `web/dist/`; von dort wird das Frontend per
 `go:embed` ins Binary übernommen.
+
+## Webhooks
+
+Unter **Einstellungen → Benachrichtigungen** beliebig viele Webhooks anlegen, jeder
+mit eigener Ereignisauswahl (IP-Wechsel, DNS-Update fehlgeschlagen / wieder OK,
+Tunnel-Statuswechsel). Vorlagen erleichtern den Start; technisch ist jeder Webhook
+gleich: Methode, URL, Header und ein Body-Template (Go `text/template`).
+
+- Im Template: `.Type .Title .Message .Priority .Time .Data.<feld>` und die
+  Funktionen `json` (für JSON-Werte, z. B. `{{json .Title}}`), `env`, `printf`,
+  `upper`, `lower`, `urlquery`. Leeres Template = Standard-JSON des Ereignisses.
+- **Geheimnisse** (Tokens, geheime URLs) nie direkt eintragen, sondern in
+  `deploy/.env` als `WEBHOOK_…` und im Webhook als `${WEBHOOK_NAME}` (URL, Header)
+  bzw. `{{env "WEBHOOK_NAME"}}` (Body). In der Datenbank steht nur der Platzhalter.
+- Erlaubt sind nur Variablen mit Präfix `WEBHOOK_` – so kann über die Oberfläche
+  z. B. `CF_API_TOKEN` nicht an einen fremden Server geschickt werden. Platzhalter
+  werden nur im konfigurierten Text ersetzt, nie in Ereignisdaten.
+- Die Vorschau im Dialog zeigt die fertige Anfrage mit Beispielereignis, ohne
+  Geheimnisse. „Testen“ schickt eine echte Testnachricht.
 
 ## Releases
 

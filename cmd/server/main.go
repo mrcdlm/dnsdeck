@@ -85,15 +85,14 @@ func run() error {
 		return ipdetect.NewDetector(ipdetect.SelectSources(ipdetect.DefaultSources(), names))
 	}
 
-	// Benachrichtigungen: Kanäle nur aus Env-Variablen (enthalten Geheimnisse).
-	channels, notifyErr := notify.ChannelsFromEnv(os.Getenv)
-	notifyConfigError := ""
-	if notifyErr != nil {
-		notifyConfigError = notifyErr.Error()
-		log.Warn("Benachrichtigungen unvollständig konfiguriert", "err", notifyErr)
+	// Benachrichtigungen: Webhooks aus der DB; Geheimnisse als ${WEBHOOK_…}
+	// aus Env-Variablen.
+	dispatcher := notify.NewDispatcher(st, os.LookupEnv, log)
+	for _, old := range []string{"NOTIFY_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_GOTIFY_URL"} {
+		if os.Getenv(old) != "" {
+			log.Warn(old + " wird nicht mehr unterstützt – Webhook unter Einstellungen anlegen (Vorlagen für ntfy, Gotify u. a.)")
+		}
 	}
-	dispatcher := notify.NewDispatcher(channels, func(t string) bool { return settings.Get().NotifyEnabled(t) }, log)
-	log.Info("Benachrichtigungskanäle", "count", len(channels))
 
 	broker := events.NewBroker()
 	tracker := ipdetect.NewTracker(newDetector(settings.Get().IPSources), st, log)
@@ -177,9 +176,9 @@ func run() error {
 		Handler: api.NewServer(api.Deps{
 			Store: st, Tracker: tracker, DDNS: svc, Zones: zones,
 			Tunnels: monitor, Events: broker, Settings: settings,
-			Notify: dispatcher, NotifyConfigError: notifyConfigError,
+			Webhooks: dispatcher, WebhookEnv: os.LookupEnv,
 			Info: api.Info{Version: version, CFTokenSet: cfg.CFAPIToken != "", CFAccountSet: cfg.CFAccountID != "",
-				DataDir: cfg.DataDir, NotifyChannel: len(channels)},
+				DataDir: cfg.DataDir},
 			Auth: auth, Log: log, Static: web.Dist(),
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,

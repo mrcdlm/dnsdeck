@@ -54,7 +54,8 @@ type testEnv struct {
 	auth    *Auth
 	cf      *cftest.Fake
 	broker  *events.Broker
-	hooks   *atomic.Int32 // Aufrufe des Test-Webhooks
+	hooks   *atomic.Int32 // Aufrufe des Test-Webhook-Empfängers
+	hookURL string        // Adresse des Test-Webhook-Empfängers
 }
 
 func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
@@ -87,16 +88,24 @@ func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
 	settings, _ := config.NewSettingsService(context.Background(), st, []string{"cloudflare", "ipify", "icanhazip"})
 
 	hooks := &atomic.Int32{}
-	hookSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { hooks.Add(1) }))
+	hookSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/geheimer-pfad" {
+			hooks.Add(1)
+		}
+	}))
 	t.Cleanup(hookSrv.Close)
-	disp := notify.NewDispatcher([]notify.Channel{notify.Webhook{URL: hookSrv.URL + "/geheimer-pfad"}}, nil, log)
+	env := func(k string) (string, bool) {
+		v, ok := map[string]string{"WEBHOOK_PFAD": "geheimer-pfad"}[k]
+		return v, ok
+	}
+	disp := notify.NewDispatcher(st, env, log)
 
 	s := NewServer(Deps{Store: st, Tracker: fakeTracker{}, DDNS: dd, Zones: cf,
-		Tunnels: mon, Events: broker, Settings: settings, Notify: disp,
+		Tunnels: mon, Events: broker, Settings: settings, Webhooks: disp, WebhookEnv: env,
 		Info: Info{Version: "v1.2.3", CFTokenSet: true}, Auth: auth, Log: log, Static: static})
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
-	return &testEnv{srv: srv, tracker: dd, auth: auth, cf: fake, broker: broker, hooks: hooks}
+	return &testEnv{srv: srv, tracker: dd, auth: auth, cf: fake, broker: broker, hooks: hooks, hookURL: hookSrv.URL}
 }
 
 func (e *testEnv) do(t *testing.T, method, path, body string, cookie *http.Cookie) *http.Response {

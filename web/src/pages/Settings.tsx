@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDown, ArrowUp, Bell, Check, Info as InfoIcon, Loader2, Send, Timer, Wifi, X } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, Check, Info as InfoIcon, Loader2, Pencil, Plus, Send, Timer, Trash2, Wifi, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
@@ -8,9 +8,29 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
-import type { NotifyEventType, Settings as SettingsData } from '@/lib/api'
+import { WebhookDialog } from '@/components/WebhookDialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import type { Settings as SettingsData, Webhook, WebhookInput } from '@/lib/api'
 import { absoluteTime, relativeTime, useNow } from '@/lib/format'
-import { useInfo, useNotifications, useSaveSettings, useSettings, useTestNotifications } from '@/lib/queries'
+import {
+  useDeleteWebhook,
+  useInfo,
+  useSaveSettings,
+  useSaveWebhook,
+  useSettings,
+  useTestWebhook,
+  useWebhooks,
+} from '@/lib/queries'
+import { eventInfo } from '@/lib/webhooks'
 
 const ipIntervals = [60, 120, 300, 600, 900, 1800, 3600]
 const tunnelIntervals = [30, 60, 120, 300, 600]
@@ -19,13 +39,6 @@ const sourceInfo: Record<string, string> = {
   cloudflare: 'Cloudflare (1.1.1.1/cdn-cgi/trace)',
   ipify: 'ipify (api.ipify.org / api6.ipify.org)',
   icanhazip: 'icanhazip.com',
-}
-
-const eventInfo: Record<NotifyEventType, { label: string; hint: string }> = {
-  ip_change: { label: 'IP-Wechsel', hint: 'Die öffentliche IPv4 oder IPv6 hat sich geändert.' },
-  update_failed: { label: 'DNS-Update fehlgeschlagen', hint: 'Einmal je neuem Fehler, nicht bei jeder Wiederholung.' },
-  update_recovered: { label: 'DNS-Update wieder OK', hint: 'Ein zuvor fehlerhafter Record ist wieder aktuell.' },
-  tunnel_status: { label: 'Tunnel-Statuswechsel', hint: 'z. B. verbunden → getrennt.' },
 }
 
 function formatSeconds(s: number): string {
@@ -173,22 +186,6 @@ function SettingsForm({ initial }: { initial: SettingsData }) {
         )}
       </Section>
 
-      <Section icon={<Bell className="size-5" />} title="Benachrichtigen bei" description="Gilt für alle konfigurierten Kanäle.">
-        {(Object.keys(eventInfo) as NotifyEventType[]).map((t) => (
-          <div key={t} className="flex items-start justify-between gap-4">
-            <div className="grid gap-1">
-              <Label htmlFor={`ev-${t}`}>{eventInfo[t].label}</Label>
-              <p className="text-muted-foreground text-xs">{eventInfo[t].hint}</p>
-            </div>
-            <Switch
-              id={`ev-${t}`}
-              checked={draft.notify_events[t]}
-              onCheckedChange={(on) => update({ notify_events: { ...draft.notify_events, [t]: on } })}
-            />
-          </div>
-        ))}
-      </Section>
-
       <div className="bg-background/90 sticky bottom-0 -mx-4 flex flex-wrap items-center justify-end gap-3 border-t px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
         {save.isError && <p className="text-destructive mr-auto text-sm" role="alert">{save.error.message}</p>}
         {saved && !dirty && (
@@ -208,80 +205,150 @@ function SettingsForm({ initial }: { initial: SettingsData }) {
   )
 }
 
-function NotificationChannels() {
-  const n = useNotifications()
-  const test = useTestNotifications()
+function WebhookCard({ webhook, onEdit, onDelete }: { webhook: Webhook; onEdit: () => void; onDelete: () => void }) {
+  const test = useTestWebhook()
+  const save = useSaveWebhook()
   const now = useNow()
-  const channels = n.data?.channels ?? []
+  const { id, missing_env, last_error, last_sent_at } = webhook
+  const input: WebhookInput = {
+    name: webhook.name,
+    enabled: webhook.enabled,
+    method: webhook.method,
+    url: webhook.url,
+    headers: webhook.headers,
+    content_type: webhook.content_type,
+    body_template: webhook.body_template,
+    events: webhook.events,
+  }
+
+  return (
+    <li className="flex flex-col gap-2 px-3 py-3" data-webhook={webhook.name}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Switch
+          checked={webhook.enabled}
+          aria-label={`${webhook.name} aktiv`}
+          onCheckedChange={(on) => save.mutate({ id, input: { ...input, enabled: on } })}
+        />
+        <span className="font-medium">{webhook.name}</span>
+        {!webhook.enabled && <Badge variant="outline">inaktiv</Badge>}
+        <div className="ml-auto flex gap-1">
+          <Button type="button" variant="ghost" size="sm" onClick={() => test.mutate(id)} disabled={test.isPending}>
+            {test.isPending ? <Loader2 className="animate-spin" /> : <Send />}
+            Testen
+          </Button>
+          <Button type="button" variant="ghost" size="icon" aria-label={`${webhook.name} bearbeiten`} onClick={onEdit}>
+            <Pencil />
+          </Button>
+          <Button type="button" variant="ghost" size="icon" aria-label={`${webhook.name} löschen`} onClick={onDelete}>
+            <Trash2 />
+          </Button>
+        </div>
+      </div>
+      <p className="text-muted-foreground font-mono text-xs break-all">
+        {webhook.method} {webhook.url}
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {webhook.events.length === 0 ? (
+          <span className="text-warning text-xs">Kein Ereignis ausgewählt – sendet nur Testnachrichten</span>
+        ) : (
+          webhook.events.map((e) => (
+            <Badge key={e} variant="secondary">
+              {eventInfo[e].label}
+            </Badge>
+          ))
+        )}
+      </div>
+      {missing_env.length > 0 && (
+        <p className="text-warning flex items-start gap-1.5 text-xs">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            Nicht gesetzt: <code className="font-mono">{missing_env.join(', ')}</code> – in deploy/.env eintragen und Container
+            neu starten.
+          </span>
+        </p>
+      )}
+      <p className="text-xs">
+        {test.data ? (
+          test.data.ok ? (
+            <span className="text-success flex items-center gap-1">
+              <Check className="size-3.5" /> Testnachricht zugestellt
+            </span>
+          ) : (
+            <span className="text-destructive flex items-center gap-1 break-words">
+              <X className="size-3.5 shrink-0" /> {test.data.error}
+            </span>
+          )
+        ) : last_error ? (
+          <span className="text-destructive break-words">Letzte Zustellung fehlgeschlagen: {last_error}</span>
+        ) : last_sent_at ? (
+          <span className="text-muted-foreground" title={absoluteTime(last_sent_at)}>
+            Zuletzt zugestellt {relativeTime(last_sent_at, now)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Noch nichts gesendet</span>
+        )}
+      </p>
+    </li>
+  )
+}
+
+function Webhooks() {
+  const webhooks = useWebhooks()
+  const del = useDeleteWebhook()
+  const [dialog, setDialog] = useState<{ open: boolean; webhook?: Webhook }>({ open: false })
+  const [toDelete, setToDelete] = useState<Webhook>()
+  const list = webhooks.data ?? []
 
   return (
     <Section
       icon={<Send className="size-5" />}
-      title="Benachrichtigungskanäle"
-      description="Aus Sicherheitsgründen nur per Env-Variable konfigurierbar (URLs und Tokens sind Geheimnisse)."
+      title="Benachrichtigungen (Webhooks)"
+      description="Beliebige Dienste per HTTP-Anfrage benachrichtigen – Vorlagen für ntfy, Gotify, Discord, Slack, Telegram und Home Assistant."
     >
-      {n.data?.config_error && (
-        <div className="border-warning/40 bg-warning/10 flex gap-3 rounded-md border p-3 text-sm">
-          <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" />
-          <span>{n.data.config_error}</span>
-        </div>
-      )}
-      {n.isPending ? (
-        <Skeleton className="h-12" />
-      ) : channels.length === 0 ? (
-        <div className="text-muted-foreground text-sm">
-          <p>Keine Kanäle konfiguriert. In <code className="font-mono">deploy/.env</code> eintragen und neu starten:</p>
-          <pre className="bg-muted mt-2 overflow-x-auto rounded-md p-3 text-xs">
-{`NOTIFY_NTFY_URL=https://ntfy.sh/dein-topic
-NOTIFY_NTFY_TOKEN=            # optional
-NOTIFY_GOTIFY_URL=https://gotify.example.com
-NOTIFY_GOTIFY_TOKEN=app-token
-NOTIFY_WEBHOOK_URL=https://example.com/hook`}
-          </pre>
-        </div>
+      {webhooks.isPending ? (
+        <Skeleton className="h-16" />
+      ) : webhooks.isError ? (
+        <p className="text-destructive text-sm">Webhooks konnten nicht geladen werden: {webhooks.error.message}</p>
+      ) : list.length === 0 ? (
+        <p className="text-muted-foreground text-sm">Noch keine Webhooks.</p>
       ) : (
         <ul className="divide-y rounded-md border">
-          {channels.map((c, i) => {
-            const result = test.data?.[i]
-            return (
-              <li key={`${c.type}-${i}`} className="flex flex-col gap-1 px-3 py-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{c.type}</Badge>
-                  <span className="text-muted-foreground font-mono text-xs">{c.target}</span>
-                  {result &&
-                    (result.ok ? (
-                      <span className="text-success ml-auto flex items-center gap-1 text-xs">
-                        <Check className="size-3.5" /> Test zugestellt
-                      </span>
-                    ) : (
-                      <span className="text-destructive ml-auto flex items-center gap-1 text-xs">
-                        <X className="size-3.5" /> {result.error}
-                      </span>
-                    ))}
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  {c.last_error ? (
-                    <span className="text-destructive">Letzter Versuch fehlgeschlagen: {c.last_error}</span>
-                  ) : c.last_sent ? (
-                    <span title={absoluteTime(c.last_sent)}>Zuletzt zugestellt {relativeTime(c.last_sent, now)}</span>
-                  ) : (
-                    'Noch nichts gesendet'
-                  )}
-                </p>
-              </li>
-            )
-          })}
+          {list.map((w) => (
+            <WebhookCard key={w.id} webhook={w} onEdit={() => setDialog({ open: true, webhook: w })} onDelete={() => setToDelete(w)} />
+          ))}
         </ul>
       )}
-      {channels.length > 0 && (
-        <div>
-          <Button type="button" variant="outline" onClick={() => test.mutate()} disabled={test.isPending}>
-            {test.isPending ? <Loader2 className="animate-spin" /> : <Send />}
-            Testnachricht senden
-          </Button>
-          {test.isError && <p className="text-destructive mt-2 text-sm">{test.error.message}</p>}
-        </div>
-      )}
+      <div>
+        <Button type="button" variant="outline" onClick={() => setDialog({ open: true })}>
+          <Plus /> Webhook hinzufügen
+        </Button>
+      </div>
+
+      <WebhookDialog open={dialog.open} webhook={dialog.webhook} onOpenChange={(open) => setDialog((d) => ({ ...d, open }))} />
+
+      <AlertDialog open={toDelete !== undefined} onOpenChange={(open) => !open && setToDelete(undefined)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Webhook löschen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              „{toDelete?.name}“ wird gelöscht und erhält keine Benachrichtigungen mehr. Die Env-Variablen in deploy/.env
+              bleiben unverändert.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                if (toDelete) del.mutate(toDelete.id, { onSuccess: () => setToDelete(undefined) })
+              }}
+              disabled={del.isPending}
+            >
+              Löschen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Section>
   )
 }
@@ -326,7 +393,7 @@ export function Settings() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Einstellungen</h1>
-        <p className="text-muted-foreground text-sm">Intervalle, IP-Quellen und Benachrichtigungen</p>
+        <p className="text-muted-foreground text-sm">Intervalle, IP-Quellen und Webhooks</p>
       </div>
       {settings.isPending ? (
         <Skeleton className="h-96" />
@@ -336,7 +403,7 @@ export function Settings() {
         // key: nach dem Speichern (oder Änderung in anderem Tab) neu initialisieren
         <SettingsForm key={JSON.stringify(settings.data)} initial={settings.data} />
       )}
-      <NotificationChannels />
+      <Webhooks />
       <SystemInfo />
     </div>
   )

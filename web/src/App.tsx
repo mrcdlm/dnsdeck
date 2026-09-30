@@ -1,13 +1,31 @@
+import { Loader2 } from 'lucide-react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
 
 import { Layout } from '@/components/Layout'
 import { RequireAuth } from '@/components/RequireAuth'
 import { Dashboard } from '@/pages/Dashboard'
-import { History } from '@/pages/History'
 import { Login } from '@/pages/Login'
-import { Records } from '@/pages/Records'
-import { Settings } from '@/pages/Settings'
-import { Tunnels } from '@/pages/Tunnels'
+
+// Unterseiten erst bei Bedarf laden (kleineres Start-Bundle).
+const Records = lazy(() => import('@/pages/Records').then((m) => ({ default: m.Records })))
+const Tunnels = lazy(() => import('@/pages/Tunnels').then((m) => ({ default: m.Tunnels })))
+const History = lazy(() => import('@/pages/History').then((m) => ({ default: m.History })))
+const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.Settings })))
+
+function Lazy({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="grid place-items-center py-24">
+          <Loader2 className="text-muted-foreground size-6 animate-spin" />
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
+  )
+}
 
 export default function App() {
   return (
@@ -21,10 +39,10 @@ export default function App() {
         }
       >
         <Route index element={<Dashboard />} />
-        <Route path="records" element={<Records />} />
-        <Route path="tunnels" element={<Tunnels />} />
-        <Route path="verlauf" element={<History />} />
-        <Route path="einstellungen" element={<Settings />} />
+        <Route path="records" element={<Lazy><Records /></Lazy>} />
+        <Route path="tunnels" element={<Lazy><Tunnels /></Lazy>} />
+        <Route path="verlauf" element={<Lazy><History /></Lazy>} />
+        <Route path="einstellungen" element={<Lazy><Settings /></Lazy>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

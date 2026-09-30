@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -61,7 +60,6 @@ func (s *SettingsService) Get() Settings {
 	defer s.mu.RUnlock()
 	c := s.cur
 	c.IPSources = slices.Clone(c.IPSources)
-	c.NotifyEvents = cloneMap(c.NotifyEvents)
 	return c
 }
 
@@ -80,12 +78,10 @@ func (s *SettingsService) Update(ctx context.Context, next Settings) (Settings, 
 	if err := s.validate(next); err != nil {
 		return Settings{}, err
 	}
-	events, _ := json.Marshal(next.NotifyEvents)
 	for _, kv := range [][2]string{
 		{KeyIPCheckInterval, next.IPCheckInterval.String()},
 		{KeyTunnelInterval, next.TunnelInterval.String()},
 		{KeyIPSources, strings.Join(next.IPSources, ",")},
-		{KeyNotifyEvents, string(events)},
 	} {
 		if err := s.store.SetSetting(ctx, kv[0], kv[1]); err != nil {
 			return Settings{}, err
@@ -136,17 +132,6 @@ func (s Settings) EffectiveSources(all []string) []string {
 		return all
 	}
 	return s.IPSources
-}
-
-func cloneMap(m map[string]bool) map[string]bool {
-	if m == nil {
-		return nil
-	}
-	out := make(map[string]bool, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
-	return out
 }
 
 // IsValidation meldet, ob err ein Eingabefehler ist.

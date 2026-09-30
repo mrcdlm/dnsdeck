@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
+	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
@@ -24,6 +25,7 @@ type dataStore interface {
 	ListIPChanges(ctx context.Context, f store.IPChangeFilter, limit int) ([]store.IPChange, error)
 	TunnelStatusChanges(ctx context.Context, f store.TunnelChangeFilter, limit int) ([]store.TunnelChange, error)
 	recordStore
+	webhookStore
 }
 
 type ipTracker interface {
@@ -46,36 +48,36 @@ type Deps struct {
 	Events  eventSource          // nil = keine Live-Updates
 	// Settings: Laufzeit-Einstellungen (nil = nicht änderbar)
 	Settings settingsService
-	// Notify: Benachrichtigungskanäle (nil = keine)
-	Notify notifyService
-	// NotifyConfigError: Fehler beim Lesen der NOTIFY_*-Variablen (ohne Werte)
-	NotifyConfigError string
-	Info              Info
-	Auth              *Auth
-	Log               *slog.Logger
-	Static            fs.FS
+	// Webhooks: Zustellung von Testnachrichten (nil = keine Webhooks)
+	Webhooks webhookTester
+	// WebhookEnv: Zugriff auf Env-Variablen, um fehlende WEBHOOK_* anzuzeigen
+	WebhookEnv notify.Env
+	Info       Info
+	Auth       *Auth
+	Log        *slog.Logger
+	Static     fs.FS
 }
 
 type Server struct {
-	store             dataStore
-	tracker           ipTracker
-	ddns              ddnsService
-	zones             providers.ZoneLister
-	tunnels           tunnelService
-	events            eventSource
-	settings          settingsService
-	notify            notifyService
-	notifyConfigError string
-	info              Info
-	auth              *Auth
-	log               *slog.Logger
-	static            fs.FS
+	store      dataStore
+	tracker    ipTracker
+	ddns       ddnsService
+	zones      providers.ZoneLister
+	tunnels    tunnelService
+	events     eventSource
+	settings   settingsService
+	webhooks   webhookTester
+	webhookEnv notify.Env
+	info       Info
+	auth       *Auth
+	log        *slog.Logger
+	static     fs.FS
 }
 
 func NewServer(d Deps) *Server {
 	return &Server{store: d.Store, tracker: d.Tracker, ddns: d.DDNS, zones: d.Zones,
-		tunnels: d.Tunnels, events: d.Events, settings: d.Settings, notify: d.Notify,
-		notifyConfigError: d.NotifyConfigError, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
+		tunnels: d.Tunnels, events: d.Events, settings: d.Settings, webhooks: d.Webhooks,
+		webhookEnv: d.WebhookEnv, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -113,8 +115,12 @@ func (s *Server) Routes() http.Handler {
 
 			r.Get("/settings", s.handleGetSettings)
 			r.Put("/settings", s.handlePutSettings)
-			r.Get("/notifications", s.handleNotifications)
-			r.Post("/notifications/test", s.handleNotificationTest)
+			r.Get("/webhooks", s.handleListWebhooks)
+			r.Post("/webhooks", s.handleCreateWebhook)
+			r.Post("/webhooks/preview", s.handlePreviewWebhook)
+			r.Put("/webhooks/{id}", s.handleUpdateWebhook)
+			r.Delete("/webhooks/{id}", s.handleDeleteWebhook)
+			r.Post("/webhooks/{id}/test", s.handleTestWebhook)
 			r.Get("/info", s.handleInfo)
 		})
 
