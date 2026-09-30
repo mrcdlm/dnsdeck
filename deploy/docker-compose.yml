@@ -10,7 +10,7 @@ name: dnsdeck
 services:
   dnsdeck:
     # Pinned version from .env – intentionally no "latest"
-    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?Set DNSDECK_VERSION in .env, e.g. 0.1.0}
+    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?Set DNSDECK_VERSION in .env, e.g. 0.2.0}
     container_name: dnsdeck
     restart: unless-stopped
     ports:

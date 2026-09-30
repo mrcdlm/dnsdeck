@@ -10,13 +10,13 @@
 
 [English](README.md) · Deutsch
 
-![Dashboard](docs/screenshots/dashboard.png)
+![Dashboard](docs/screenshots/de/dashboard.png)
 
 </div>
 
 dnsdeck hält DNS-Einträge bei Cloudflare automatisch auf der aktuellen öffentlichen
 IP-Adresse, zeigt nachvollziehbar, was sich wann geändert hat, und überwacht Cloudflare
-Tunnels. Ausgeliefert wird ein einzelner, kleiner Container (≈ 25 MB, amd64 und arm64) mit
+Tunnels. Ausgeliefert wird ein einzelner, kleiner Container (≈ 30 MB, amd64 und arm64) mit
 eingebauter Weboberfläche und SQLite-Datenbank.
 
 ## Funktionen
@@ -27,10 +27,13 @@ eingebauter Weboberfläche und SQLite-Datenbank.
 - **DynDNS für Cloudflare** – A- und AAAA-Einträge verwalten (Proxy-Status, TTL). Geändert
   wird nur, wenn der tatsächliche Stand bei Cloudflare abweicht; fehlende Einträge werden
   angelegt.
+- **DNS-Verbreitungsstatus** – nach jeder Änderung fragt dnsdeck öffentliche Resolver
+  (Cloudflare, Google, Quad9, OpenDNS) und die autoritativen Nameserver der Zone, ob sie die
+  neue Adresse schon liefern, und zeigt je Eintrag, wie weit die Änderung verbreitet ist.
 - **Cloudflare-Tunnel-Monitoring** – Status, aktive Verbindungen, Rechenzentren,
   Client-Versionen und Uptime über 24 Stunden bzw. 7 Tage je Tunnel.
-- **Live-Dashboard** – aktualisiert sich sofort per Server-Sent Events, Dark Mode, mobil
-  nutzbar.
+- **Live-Dashboard** – aktualisiert sich sofort per Server-Sent Events, mobil nutzbar; heller
+  und dunkler Modus nach Systemeinstellung; Deutsch und Englisch.
 - **Verlauf** – IP-Wechsel, DNS-Updates und Tunnel-Statuswechsel, filterbar.
 - **Benachrichtigungen per Webhook** – beliebig viele Webhooks mit eigener Methode, URL,
   eigenen Headern und Body-Template. Vorlagen für ntfy, Gotify, Discord, Slack, Telegram und
@@ -40,7 +43,7 @@ eingebauter Weboberfläche und SQLite-Datenbank.
 
 | Records | Tunnels | Webhooks |
 |---|---|---|
-| ![Records](docs/screenshots/records.png) | ![Tunnels](docs/screenshots/tunnels.png) | ![Webhooks](docs/screenshots/webhooks.png) |
+| ![Records](docs/screenshots/de/records.png) | ![Tunnels](docs/screenshots/de/tunnels.png) | ![Webhooks](docs/screenshots/de/webhooks.png) |
 
 ## Schnellstart
 
@@ -77,10 +80,12 @@ Intervalle, IP-Quellen und Webhooks werden in der Weboberfläche gepflegt.
 | `APP_PASSWORD` | ja | Passwort für die Weboberfläche (Klartext oder bcrypt-Hash, max. 72 Bytes) |
 | `CF_API_TOKEN` | für DNS/Tunnels | Cloudflare-API-Token, siehe unten |
 | `CF_ACCOUNT_ID` | für Tunnels | Cloudflare-Account-ID |
-| `DNSDECK_VERSION` | ja (Compose) | Zu startende Image-Version, z. B. `0.1.0` – bewusst fest, kein `latest` |
+| `DNSDECK_VERSION` | ja (Compose) | Zu startende Image-Version, z. B. `0.2.0` – bewusst fest, kein `latest` |
 | `DNSDECK_PORT` | nein | Port auf dem Host für die Weboberfläche (Standard `8080`) |
 | `TZ` | nein | Zeitzone für Log-Zeitstempel (Standard `UTC`) |
 | `WEBHOOK_*` | nein | Geheimnisse für Webhooks, siehe [Benachrichtigungen](#benachrichtigungen) |
+| `DNSCHECK_RESOLVERS` | nein | Resolver für die Verbreitungsprüfung, kommagetrennt `[Name=]IP[:Port]`; leer = Standardliste, `off` = abgeschaltet, siehe [DNS-Verbreitung](#dns-verbreitung) |
+| `DNSCHECK_AUTHORITATIVE` | nein | `off` = autoritative Nameserver der Zone nicht abfragen (Standard `on`) |
 | `LOG_LEVEL` | nein | `debug`, `info`, `warn` oder `error` (Standard `info`) |
 | `PORT`, `DATA_DIR` | nein | Port und Datenbankverzeichnis im Container (Standard `8080`, `/data`) |
 
@@ -107,11 +112,47 @@ Unter *Mein Profil → API-Token* ein benutzerdefiniertes Token mit diesen Recht
   schreibt nur bei Abweichungen. Die IP wird immer durchgesetzt; bei Proxy-Status und TTL hat
   Cloudflare das letzte Wort – dnsdeck überträgt sie nur, wenn sie in dnsdeck geändert
   wurden. Bestehende Einträge werden mit ihren aktuellen Cloudflare-Werten übernommen.
+- **DNS-Verbreitung:** siehe [unten](#dns-verbreitung).
 - **Entfernen** eines Eintrags in dnsdeck beendet nur die Verwaltung; der Eintrag bei
   Cloudflare bleibt bestehen.
 - **Tunnels** werden standardmäßig alle 60 Sekunden abgefragt. dnsdeck speichert Zeiträume
   gleichen Status (30 Tage Verlauf); Zeiten ohne Daten – etwa während dnsdeck offline war –
   erscheinen als unbekannt und zählen nicht als Uptime. `degraded` gilt als erreichbar.
+
+## DNS-Verbreitung
+
+Nach dem Anlegen oder Ändern eines Eintrags prüft dnsdeck, ob die Änderung im DNS angekommen
+ist: 10 Sekunden nach der Änderung und danach alle 30 Sekunden, bis alle Server den neuen
+Stand liefern – höchstens für die TTL des Eintrags plus zwei Minuten (automatische TTL zählt
+als 5 Minuten, nie länger als eine Stunde). Die Spalte **Verbreitung** auf der Seite Records
+zeigt das Ergebnis; ein Klick öffnet die Antwort jedes Servers mit der verbleibenden
+Cache-Zeit, **Jetzt prüfen** wiederholt die Prüfung jederzeit.
+
+- **Öffentliche Resolver** (Standard: Cloudflare `1.1.1.1`, Google `8.8.8.8`, Quad9
+  `9.9.9.9`, OpenDNS `208.67.222.222`) antworten aus ihrem Cache und zeigen, was Clients
+  gerade sehen.
+- **Autoritative Nameserver** der Zone werden direkt gefragt und zeigen den aktuellen Stand
+  bei Cloudflare.
+- **Proxied Einträge** lösen auf Cloudflare-Adressen auf; geprüft wird daher nur die
+  Auflösbarkeit.
+- Server ohne Antwort werden angezeigt, zählen aber nicht gegen das Ergebnis.
+
+Die Prüfung sendet nur DNS-Anfragen für die verwalteten Namen (UDP/TCP Port 53). Mit
+`DNSCHECK_RESOLVERS` lassen sich andere Resolver wählen, z. B.
+`DNSCHECK_RESOLVERS=Quad9=9.9.9.9,Lokal=192.168.1.1:53`; `DNSCHECK_RESOLVERS=off` schaltet die
+Funktion ab.
+
+## Sprache und Darstellung
+
+Die Weboberfläche gibt es auf Deutsch und Englisch. Sie folgt der Browsersprache und lässt
+sich mit **DE | EN** in der Seitenleiste oder auf der Anmeldeseite umschalten; die Wahl
+merkt sich der Browser. Server-Meldungen (Fehler, Record-Status, Update-Protokoll) folgen der
+gewählten Sprache; Einträge aus Versionen vor 0.2.0 behalten ihren ursprünglichen deutschen
+Text. Die Sprache der Benachrichtigungen ist eine eigene Einstellung unter **Einstellungen**
+(Standard Deutsch).
+
+Der Darstellungs-Button daneben wechselt zwischen **System** (Standard, folgt live dem
+Betriebssystem), **Hell** und **Dunkel**.
 
 ## Benachrichtigungen
 
@@ -189,6 +230,15 @@ CF_API_TOKEN=dev CF_ACCOUNT_ID=dev-account CF_API_BASE_URL=http://localhost:8787
 
 curl -X POST 'localhost:8787/_tunnel?name=home&status=down'   # Tunnel-Status ändern
 curl -X POST 'localhost:8787/_fail?status=500'                # Ausfall simulieren (0 = Ende)
+```
+
+Die Nachbildung beantwortet auf Wunsch auch DNS-Anfragen für ihre Einträge, zum Testen der
+Verbreitungsprüfung (`-dns-lagged` liefert den Stand von vor `-dns-lag`, wie ein
+Resolver-Cache):
+
+```sh
+go run ./cmd/cfmock -token dev -zones example.com -dns 127.0.0.1:8553 -dns-lagged 127.0.0.1:8554 -dns-lag 30s
+DNSCHECK_RESOLVERS='Aktuell=127.0.0.1:8553,Verzögert=127.0.0.1:8554' DNSCHECK_AUTHORITATIVE=off … go run ./cmd/server
 ```
 
 Prüfungen (laufen alle auch in der CI):
