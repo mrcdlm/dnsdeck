@@ -80,7 +80,7 @@ Intervalle, IP-Quellen und Webhooks werden in der Weboberfläche gepflegt.
 | `APP_PASSWORD` | ja | Passwort für die Weboberfläche (Klartext oder bcrypt-Hash, max. 72 Bytes) |
 | `CF_API_TOKEN` | für DNS/Tunnels | Cloudflare-API-Token, siehe unten |
 | `CF_ACCOUNT_ID` | für Tunnels | Cloudflare-Account-ID |
-| `DNSDECK_VERSION` | ja (Compose) | Zu startende Image-Version, z. B. `0.2.0` – bewusst fest, kein `latest` |
+| `DNSDECK_VERSION` | ja (Compose) | Zu startende Image-Version, z. B. `0.2.1` – bewusst fest, kein `latest` |
 | `DNSDECK_PORT` | nein | Port auf dem Host für die Weboberfläche (Standard `8080`) |
 | `TZ` | nein | Zeitzone für Log-Zeitstempel (Standard `UTC`) |
 | `WEBHOOK_*` | nein | Geheimnisse für Webhooks, siehe [Benachrichtigungen](#benachrichtigungen) |
@@ -147,8 +147,8 @@ Funktion ab.
 Die Weboberfläche gibt es auf Deutsch und Englisch. Sie folgt der Browsersprache und lässt
 sich mit **DE | EN** in der Seitenleiste oder auf der Anmeldeseite umschalten; die Wahl
 merkt sich der Browser. Server-Meldungen (Fehler, Record-Status, Update-Protokoll) folgen der
-gewählten Sprache; Einträge aus Versionen vor 0.2.0 behalten ihren ursprünglichen deutschen
-Text. Die Sprache der Benachrichtigungen ist eine eigene Einstellung unter **Einstellungen**
+gewählten Sprache; Einträge aus Versionen vor 0.2.0 werden beim Start nach Möglichkeit
+umgewandelt. Die Sprache der Benachrichtigungen ist eine eigene Einstellung unter **Einstellungen**
 (Standard Deutsch).
 
 Der Darstellungs-Button daneben wechselt zwischen **System** (Standard, folgt live dem

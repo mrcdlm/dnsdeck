@@ -77,7 +77,7 @@ intervals, IP sources and webhooks are managed in the web interface.
 | `APP_PASSWORD` | yes | Password for the web interface (plain text or bcrypt hash, max. 72 bytes) |
 | `CF_API_TOKEN` | for DNS / tunnels | Cloudflare API token, see below |
 | `CF_ACCOUNT_ID` | for tunnels | Cloudflare account ID |
-| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.2.0` – pinned on purpose, no `latest` |
+| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.2.1` – pinned on purpose, no `latest` |
 | `DNSDECK_PORT` | no | Host port for the web interface (default `8080`) |
 | `TZ` | no | Time zone for log timestamps (default `UTC`) |
 | `WEBHOOK_*` | no | Secrets referenced by webhooks, see [Notifications](#notifications) |
@@ -141,7 +141,7 @@ the feature.
 The web interface is available in English and German. It follows the browser language and
 can be switched with **EN | DE** in the sidebar or on the login page; the choice is stored in
 the browser. Server messages (errors, record status, update log) follow the chosen language;
-entries written by versions before 0.2.0 keep their original German text. The language of
+entries written by versions before 0.2.0 are converted on start where possible. The language of
 notifications is a separate setting under **Settings** (default German).
 
 The theme button next to it switches between **System** (default, follows the operating

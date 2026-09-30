@@ -78,6 +78,12 @@ func run() error {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer st.Close()
+	// Deutsche Alttexte (vor 0.2.0) übersetzbar machen
+	if n, err := st.UpgradeLegacyMessages(ctx); err != nil {
+		log.Warn("Alte Meldungen konnten nicht umgewandelt werden", "err", err)
+	} else if n > 0 {
+		log.Info("Alte Meldungen übersetzbar gemacht", "count", n)
+	}
 
 	settings, warnings := config.NewSettingsService(ctx, st, ipdetect.SourceNames())
 	for _, w := range warnings {

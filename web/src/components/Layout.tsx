@@ -72,7 +72,7 @@ function Shell() {
   return (
     <div className="flex min-h-svh flex-col md:flex-row">
       {/* Desktop: Seitenleiste */}
-      <aside className="bg-card/40 hidden w-60 shrink-0 flex-col border-r p-4 md:flex">
+      <aside className="bg-card/40 sticky top-0 hidden h-svh w-60 shrink-0 flex-col overflow-y-auto border-r p-4 md:flex">
         <Logo className="px-2 py-1" />
         <nav className="mt-6 flex flex-col gap-1">
           {nav.map((item) => (

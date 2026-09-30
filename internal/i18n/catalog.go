@@ -52,14 +52,16 @@ var catalog = map[string]entry{
 	"record.ttl_invalid":       {"TTL muss 1 (automatisch) oder 60–86400 Sekunden sein", "TTL must be 1 (automatic) or 60–86400 seconds"},
 
 	// DDNS-Abgleich
-	"ddns.no_ip":           {"keine öffentliche {family}-Adresse bekannt", "no public {family} address known"},
-	"ddns.created":         {"bei Cloudflare angelegt", "created at Cloudflare"},
-	"ddns.adopted":         {"bestehenden Eintrag übernommen (Proxy {proxy}, TTL {ttl})", "adopted existing record (proxy {proxy}, TTL {ttl})"},
-	"ddns.adopted_short":   {"bestehenden Eintrag übernommen", "adopted existing record"},
-	"ddns.proxy_change":    {"Proxy: {from} → {to}", "Proxy: {from} → {to}"},
-	"ddns.ttl_change":      {"TTL: {from} → {to}", "TTL: {from} → {to}"},
-	"ddns.recovered":       {"Abgleich wieder erfolgreich", "Sync successful again"},
-	"ddns.recovered_after": {"Abgleich wieder erfolgreich (vorher: {detail})", "Sync successful again (previously: {detail})"},
+	"ddns.no_ip":         {"keine öffentliche {family}-Adresse bekannt", "no public {family} address known"},
+	"ddns.created":       {"bei Cloudflare angelegt", "created at Cloudflare"},
+	"ddns.adopted":       {"bestehenden Eintrag übernommen (Proxy {proxy}, TTL {ttl})", "adopted existing record (proxy {proxy}, TTL {ttl})"},
+	"ddns.adopted_short": {"bestehenden Eintrag übernommen", "adopted existing record"},
+	"ddns.proxy_change":  {"Proxy: {from} → {to}", "Proxy: {from} → {to}"},
+	"ddns.ttl_change":    {"TTL: {from} → {to}", "TTL: {from} → {to}"},
+	"ddns.recovered":     {"Abgleich wieder erfolgreich", "Sync successful again"},
+	// nur für Alttexte aus frühen Versionen
+	"ddns.settings_changed": {"Proxy/TTL angepasst", "Proxy/TTL adjusted"},
+	"ddns.recovered_after":  {"Abgleich wieder erfolgreich (vorher: {detail})", "Sync successful again (previously: {detail})"},
 
 	// IP-Erkennung
 	"ip.no_source":     {"keine Quelle erreichbar", "no source reachable"},
