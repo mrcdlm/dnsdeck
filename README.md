@@ -16,9 +16,7 @@ English · [Deutsch](README.de.md)
 
 dnsdeck keeps your Cloudflare DNS records pointed at your current public IP address, shows
 what changed and when, and watches your Cloudflare Tunnels. It ships as a single small
-container (≈ 25 MB, amd64 and arm64) with an embedded web interface and an SQLite database.
-
-> **Note:** The web interface is currently available in German.
+container (≈ 30 MB, amd64 and arm64) with an embedded web interface and an SQLite database.
 
 ## Features
 
@@ -27,9 +25,13 @@ container (≈ 25 MB, amd64 and arm64) with an embedded web interface and an SQL
   triggers a DNS update.
 - **Dynamic DNS for Cloudflare** – manage A and AAAA records (proxy status, TTL). Records are
   only changed when the actual state at Cloudflare differs; missing records are created.
+- **DNS propagation status** – after every change dnsdeck asks public resolvers (Cloudflare,
+  Google, Quad9, OpenDNS) and the zone's authoritative name servers whether they already
+  return the new address, and shows per record how far the change has spread.
 - **Cloudflare Tunnel monitoring** – status, active connections, data centers, client
   versions and 24 h / 7 day uptime per tunnel.
-- **Live dashboard** – updates instantly via Server-Sent Events, dark mode, works on mobile.
+- **Live dashboard** – updates instantly via Server-Sent Events, works on mobile; light and
+  dark mode following the system setting; English and German.
 - **History** – IP changes, DNS updates and tunnel status changes, filterable.
 - **Notifications via webhooks** – any number of webhooks with custom method, URL, headers
   and body template. Templates included for ntfy, Gotify, Discord, Slack, Telegram and
@@ -75,10 +77,12 @@ intervals, IP sources and webhooks are managed in the web interface.
 | `APP_PASSWORD` | yes | Password for the web interface (plain text or bcrypt hash, max. 72 bytes) |
 | `CF_API_TOKEN` | for DNS / tunnels | Cloudflare API token, see below |
 | `CF_ACCOUNT_ID` | for tunnels | Cloudflare account ID |
-| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.1.0` – pinned on purpose, no `latest` |
+| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.2.0` – pinned on purpose, no `latest` |
 | `DNSDECK_PORT` | no | Host port for the web interface (default `8080`) |
 | `TZ` | no | Time zone for log timestamps (default `UTC`) |
 | `WEBHOOK_*` | no | Secrets referenced by webhooks, see [Notifications](#notifications) |
+| `DNSCHECK_RESOLVERS` | no | Resolvers for the propagation check, comma-separated `[Name=]IP[:port]`; empty = default list, `off` = disabled, see [DNS propagation](#dns-propagation) |
+| `DNSCHECK_AUTHORITATIVE` | no | `off` = do not query the zone's authoritative name servers (default `on`) |
 | `LOG_LEVEL` | no | `debug`, `info`, `warn` or `error` (default `info`) |
 | `PORT`, `DATA_DIR` | no | Port and database directory inside the container (default `8080`, `/data`) |
 
@@ -105,10 +109,43 @@ use *Client IP Address Filtering* – the token would lock itself out after your
   writes when something differs. The IP is always enforced; for proxy status and TTL the value
   at Cloudflare wins – dnsdeck only pushes them when you change them in dnsdeck. Existing
   records are adopted with their current Cloudflare settings.
+- **DNS propagation:** see [below](#dns-propagation).
 - **Removing a record** in dnsdeck only stops managing it; the record at Cloudflare stays.
 - **Tunnels** are polled every 60 seconds by default. dnsdeck stores periods of equal status (30 days of
   history); times without data – for example while dnsdeck was offline – are shown as unknown
   instead of being counted as uptime. `degraded` counts as available.
+
+## DNS propagation
+
+After a record has been created or changed, dnsdeck checks whether the change has reached the
+DNS: 10 seconds after the change and then every 30 seconds until all servers return the new
+state – at most for the record's TTL plus two minutes (automatic TTL counts as 5 minutes,
+never longer than an hour). The **Propagation** column on the records page shows the result;
+a click opens the answer of every server with its remaining cache time, and **Check now**
+repeats the check at any time.
+
+- **Public resolvers** (default: Cloudflare `1.1.1.1`, Google `8.8.8.8`, Quad9 `9.9.9.9`,
+  OpenDNS `208.67.222.222`) answer from their cache and show what clients currently see.
+- **Authoritative name servers** of the zone are queried directly and show the current state
+  at Cloudflare.
+- **Proxied records** resolve to Cloudflare addresses, so only resolvability is checked.
+- Servers that do not answer are shown but do not count against the result.
+
+The check only sends DNS queries for your managed record names (UDP/TCP port 53). Use
+`DNSCHECK_RESOLVERS` to choose other resolvers, for example
+`DNSCHECK_RESOLVERS=Quad9=9.9.9.9,Local=192.168.1.1:53`, or `DNSCHECK_RESOLVERS=off` to disable
+the feature.
+
+## Languages and appearance
+
+The web interface is available in English and German. It follows the browser language and
+can be switched with **EN | DE** in the sidebar or on the login page; the choice is stored in
+the browser. Server messages (errors, record status, update log) follow the chosen language;
+entries written by versions before 0.2.0 keep their original German text. The language of
+notifications is a separate setting under **Settings** (default German).
+
+The theme button next to it switches between **System** (default, follows the operating
+system live), **Light** and **Dark**.
 
 ## Notifications
 
@@ -184,6 +221,14 @@ CF_API_TOKEN=dev CF_ACCOUNT_ID=dev-account CF_API_BASE_URL=http://localhost:8787
 
 curl -X POST 'localhost:8787/_tunnel?name=home&status=down'   # change a tunnel status
 curl -X POST 'localhost:8787/_fail?status=500'                # simulate an outage (0 = end)
+```
+
+The mock can also answer DNS queries for its records, for testing the propagation check
+(`-dns-lagged` serves the state from `-dns-lag` ago, like a resolver cache):
+
+```sh
+go run ./cmd/cfmock -token dev -zones example.com -dns 127.0.0.1:8553 -dns-lagged 127.0.0.1:8554 -dns-lag 30s
+DNSCHECK_RESOLVERS='Current=127.0.0.1:8553,Lagged=127.0.0.1:8554' DNSCHECK_AUTHORITATIVE=off … go run ./cmd/server
 ```
 
 Checks (all run in CI):

@@ -26,10 +26,12 @@ Läuft als **ein einziger Docker-Container** auf jedem Linux-Host mit Docker Com
 /internal/providers  DNS-Provider (Interface + cloudflare/ als erste Implementierung)
 /internal/tunnels    Cloudflare-Tunnel-Monitoring
 /internal/notify     Benachrichtigungen (generische Webhooks)
+/internal/dnscheck   DNS-Verbreitungsprüfung (öffentliche Resolver + autoritative NS)
+/internal/i18n       Nachrichtenkatalog DE/EN für alle Server-Meldungen
 /internal/scheduler  periodische Jobs
 /internal/store      SQLite, Migrationen
 /internal/api        HTTP-Handler, SSE
-/web                 React-Frontend (Vite)
+/web                 React-Frontend (Vite), Texte in web/src/locales/{de,en}.json
 /deploy              docker-compose.yml, Beispiel-.env
 ```
 
