@@ -10,7 +10,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Family, FamilyState } from '@/lib/api'
 import { absoluteTime, relativeTime, useNow } from '@/lib/format'
-import { useIP, useIPHistory, useRecords, useRefreshIP } from '@/lib/queries'
+import { useIP, useIPHistory, useRecords, useRefreshIP, useTunnels } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 const familyLabel: Record<Family, string> = { ipv4: 'IPv4', ipv6: 'IPv6' }
@@ -222,16 +222,44 @@ function RecordsTile() {
 }
 
 function TunnelsTile() {
+  const tunnels = useTunnels()
+  const o = tunnels.data
+  const counts = { up: 0, degraded: 0, down: 0 }
+  for (const t of o?.tunnels ?? []) {
+    if (t.status === 'healthy') counts.up++
+    else if (t.status === 'degraded') counts.degraded++
+    else counts.down++
+  }
+  const total = o?.tunnels.length ?? 0
+
   return (
-    <div className="bg-card/50 text-muted-foreground flex items-center gap-4 rounded-xl border border-dashed p-5">
+    <Link
+      to="/tunnels"
+      className="group bg-card hover:bg-accent/40 flex items-center gap-4 rounded-xl border p-5 transition-colors"
+    >
       <span className="bg-muted grid size-10 shrink-0 place-items-center rounded-lg">
         <Network className="size-5" />
       </span>
-      <div>
-        <div className="text-sm">Cloudflare Tunnels</div>
-        <div className="text-sm">kommt in Meilenstein 3</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-muted-foreground text-sm">Cloudflare Tunnels</div>
+        {tunnels.isPending ? (
+          <Skeleton className="mt-1 h-6 w-32" />
+        ) : !o?.configured ? (
+          <div className="text-muted-foreground font-medium">Nicht konfiguriert</div>
+        ) : total === 0 ? (
+          <div className="font-medium">Keine Tunnels</div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 font-medium">
+            <span>{total} überwacht</span>
+            {counts.up > 0 && <Badge variant="success">{counts.up} verbunden</Badge>}
+            {counts.degraded > 0 && <Badge variant="warning">{counts.degraded} eingeschränkt</Badge>}
+            {counts.down > 0 && <Badge variant="destructive">{counts.down} getrennt/inaktiv</Badge>}
+          </div>
+        )}
+        {o?.error && <div className="text-destructive mt-1 text-xs">Letzte Abfrage fehlgeschlagen</div>}
       </div>
-    </div>
+      <ChevronRight className="text-muted-foreground size-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
   )
 }
 

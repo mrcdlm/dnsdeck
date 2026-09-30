@@ -15,10 +15,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/mrcdlm/dnsdeck/internal/ddns"
+	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
 	"github.com/mrcdlm/dnsdeck/internal/store"
+	"github.com/mrcdlm/dnsdeck/internal/tunnels"
 )
 
 type fakeTracker struct{}
@@ -48,6 +50,7 @@ type testEnv struct {
 	tracker *fakeDDNS
 	auth    *Auth
 	cf      *cftest.Fake
+	broker  *events.Broker
 }
 
 func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
@@ -67,16 +70,22 @@ func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
 	}
 	log := slog.New(slog.DiscardHandler)
 	fake := cftest.New("tok", cftest.Zone{ID: "z1", Name: "example.com"})
+	fake.SetAccount("acc")
+	fake.AddTunnel("t1", "home", "healthy")
 	cfSrv := httptest.NewServer(fake)
 	t.Cleanup(cfSrv.Close)
 	cf := cloudflare.New("tok", cfSrv.URL)
+	broker := events.NewBroker()
+	t.Cleanup(broker.Close)
 	dd := &fakeDDNS{u: ddns.NewUpdater(st, cf, log)}
+	dd.u.Pub = broker
+	mon := tunnels.NewMonitor(cf, "acc", st, log, broker, nil)
 
 	s := NewServer(Deps{Store: st, Tracker: fakeTracker{}, DDNS: dd, Zones: cf,
-		Auth: auth, Log: log, Static: static})
+		Tunnels: mon, Events: broker, Auth: auth, Log: log, Static: static})
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
-	return &testEnv{srv: srv, tracker: dd, auth: auth, cf: fake}
+	return &testEnv{srv: srv, tracker: dd, auth: auth, cf: fake, broker: broker}
 }
 
 func (e *testEnv) do(t *testing.T, method, path, body string, cookie *http.Cookie) *http.Response {

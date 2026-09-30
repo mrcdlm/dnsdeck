@@ -5,6 +5,7 @@ import { RequireAuth } from '@/components/RequireAuth'
 import { Dashboard } from '@/pages/Dashboard'
 import { Login } from '@/pages/Login'
 import { Records } from '@/pages/Records'
+import { Tunnels } from '@/pages/Tunnels'
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
       >
         <Route index element={<Dashboard />} />
         <Route path="records" element={<Records />} />
+        <Route path="tunnels" element={<Tunnels />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

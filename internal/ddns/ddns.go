@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/store"
@@ -46,6 +47,8 @@ type Updater struct {
 	log      *slog.Logger
 	now      func() time.Time
 	mu       sync.Mutex
+	// Pub wird nach jedem Abgleich informiert (optional).
+	Pub events.Publisher
 }
 
 func NewUpdater(st recordStore, p providers.Provider, log *slog.Logger) *Updater {
@@ -57,6 +60,7 @@ func NewUpdater(st recordStore, p providers.Provider, log *slog.Logger) *Updater
 func (u *Updater) SyncAll(ctx context.Context, ips IPs, trigger string) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	defer events.Publish(u.Pub, events.TopicRecords)
 	recs, err := u.store.ListRecords(ctx)
 	if err != nil {
 		return err
@@ -74,6 +78,7 @@ func (u *Updater) SyncAll(ctx context.Context, ips IPs, trigger string) error {
 func (u *Updater) SyncRecord(ctx context.Context, id int64, ips IPs, trigger string) (store.Record, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	defer events.Publish(u.Pub, events.TopicRecords)
 	r, err := u.store.GetRecord(ctx, id)
 	if err != nil {
 		return store.Record{}, err
@@ -224,7 +229,9 @@ func (u *Updater) writeLog(ctx context.Context, r store.Record, trigger, result,
 		OldIP: oldIP, NewIP: newIP, Message: msg, CreatedAt: now})
 	if err != nil {
 		u.log.Error("Update-Log schreiben fehlgeschlagen", "err", err)
+		return
 	}
+	events.Publish(u.Pub, events.TopicUpdates)
 }
 
 // Service bündelt IP-Prüfung und Abgleich zu einem Durchlauf.

@@ -38,6 +38,9 @@ type Fake struct {
 	zones   []Zone
 	records map[string]*Record
 	nextID  atomic.Int64
+	// Tunnels (siehe tunnels.go)
+	accountID string
+	tunnels   []*Tunnel
 	// FailWith: wenn gesetzt, beantwortet der Fake jede Anfrage mit diesem Status.
 	failWith int
 	// Zähler für Tests
@@ -122,6 +125,8 @@ func (f *Fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	case len(parts) == 4 && parts[0] == "zones" && parts[2] == "dns_records" && r.Method == http.MethodPatch:
 		f.patchRecord(w, r, parts[1], parts[3])
+	case len(parts) == 3 && parts[0] == "accounts" && parts[2] == "cfd_tunnel" && r.Method == http.MethodGet:
+		f.listTunnels(w, r, parts[1])
 	default:
 		writeErr(w, http.StatusNotFound, 7003, "No route for that URI")
 	}

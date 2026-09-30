@@ -2,10 +2,16 @@
 // damit dnsdeck ohne echtes Token und ohne echte DNS-Einträge getestet werden
 // kann. Nicht Teil des Docker-Images.
 //
-//	go run ./cmd/cfmock -addr :8787 -token dev -zones example.com,example.org
-//	CF_API_TOKEN=dev CF_API_BASE_URL=http://localhost:8787 APP_PASSWORD=test go run ./cmd/server
+//	go run ./cmd/cfmock -addr :8787 -token dev -zones example.com,example.org \
+//	  -account dev-account -tunnels home:healthy,nas:degraded
+//	CF_API_TOKEN=dev CF_ACCOUNT_ID=dev-account CF_API_BASE_URL=http://localhost:8787 \
+//	  APP_PASSWORD=test go run ./cmd/server
 //
-// GET /_records zeigt den aktuellen Inhalt (ohne Token).
+// Steuerung (ohne Token):
+//
+//	GET  /_records                          aktueller Inhalt
+//	POST /_fail?status=500                  Ausfälle simulieren (status=0 beendet)
+//	POST /_tunnel?name=home&status=down     Tunnel-Status setzen (healthy|degraded|down|inactive)
 package main
 
 import (
@@ -23,6 +29,8 @@ func main() {
 	addr := flag.String("addr", ":8787", "Listen-Adresse")
 	token := flag.String("token", "dev", "erwartetes API-Token")
 	zoneList := flag.String("zones", "example.com", "kommagetrennte Zonen")
+	account := flag.String("account", "dev-account", "Account-ID für Tunnels")
+	tunnelList := flag.String("tunnels", "home:healthy", "kommagetrennte Tunnels name:status")
 	flag.Parse()
 
 	var zones []cftest.Zone
@@ -32,6 +40,17 @@ func main() {
 		}
 	}
 	fake := cftest.New(*token, zones...)
+	fake.SetAccount(*account)
+	for i, spec := range strings.Split(*tunnelList, ",") {
+		name, status, _ := strings.Cut(strings.TrimSpace(spec), ":")
+		if name == "" {
+			continue
+		}
+		if status == "" {
+			status = "healthy"
+		}
+		fake.AddTunnel(fmt.Sprintf("tunnel-%d", i+1), name, status)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /_records", func(w http.ResponseWriter, _ *http.Request) {
@@ -47,8 +66,22 @@ func main() {
 		fake.Fail(status)
 		w.WriteHeader(http.StatusNoContent)
 	})
+	mux.HandleFunc("POST /_tunnel", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		switch q.Get("status") {
+		case "healthy", "degraded", "down", "inactive":
+		default:
+			http.Error(w, "status muss healthy|degraded|down|inactive sein", http.StatusBadRequest)
+			return
+		}
+		if !fake.SetTunnelStatus(q.Get("name"), q.Get("status")) {
+			http.Error(w, "Tunnel unbekannt", http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.Handle("/", fake)
 
-	log.Printf("Cloudflare-Mock auf %s, Zonen: %s", *addr, *zoneList)
+	log.Printf("Cloudflare-Mock auf %s, Zonen: %s, Account: %s, Tunnels: %s", *addr, *zoneList, *account, *tunnelList)
 	log.Fatal(http.ListenAndServe(*addr, mux))
 }

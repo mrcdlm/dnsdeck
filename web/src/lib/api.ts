@@ -85,6 +85,51 @@ export interface UpdateLogEntry {
   created_at: string
 }
 
+export type TunnelStatus = 'healthy' | 'degraded' | 'down' | 'inactive'
+/** Status je Balkenstück; '' = unbekannt (nicht beobachtet) */
+export type BucketStatus = TunnelStatus | ''
+
+export interface TunnelConnection {
+  id: string
+  colo_name: string
+  client_id: string
+  client_version: string
+  opened_at: string
+  origin_ip: string
+  is_pending_reconnect: boolean
+}
+
+export interface Uptime {
+  percent: number | null
+  observed: number
+  start: string
+  bucket_seconds: number
+  buckets: BucketStatus[]
+}
+
+export interface Tunnel {
+  id: string
+  name: string
+  status: TunnelStatus
+  created_at: string
+  conns_active_at?: string
+  conns_inactive_at?: string
+  connections: TunnelConnection[]
+  remote_config: boolean
+  first_seen_at: string
+  last_seen_at: string
+  status_since?: string
+  uptime: Record<'24h' | '7d', Uptime>
+}
+
+export interface TunnelOverview {
+  configured: boolean
+  last_poll?: string
+  error?: string
+  interval_seconds: number
+  tunnels: Tunnel[]
+}
+
 export interface Session {
   authenticated: boolean
 }
@@ -134,4 +179,6 @@ export const api = {
   syncRecord: (id: number) => request<DnsRecord>('POST', `/api/records/${id}/sync`),
   syncAll: () => request<DnsRecord[]>('POST', '/api/records/sync'),
   updates: (limit = 20) => request<UpdateLogEntry[]>('GET', `/api/updates?limit=${limit}`),
+  tunnels: () => request<TunnelOverview>('GET', '/api/tunnels'),
+  refreshTunnels: () => request<TunnelOverview>('POST', '/api/tunnels/refresh'),
 }

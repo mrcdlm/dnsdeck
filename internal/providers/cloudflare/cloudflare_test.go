@@ -3,6 +3,7 @@ package cloudflare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -96,5 +97,31 @@ func TestErrors(t *testing.T) {
 	// kein Token
 	if _, err := New("", c.baseURL).ListZones(ctx); !errors.Is(err, providers.ErrNotConfigured) {
 		t.Fatalf("ErrNotConfigured erwartet, bekam %v", err)
+	}
+}
+
+func TestListTunnels(t *testing.T) {
+	c, fake := setup(t)
+	ctx := context.Background()
+	fake.SetAccount("acc1")
+	for i := range 55 { // > 1 Seite (per_page=50)
+		fake.AddTunnel(fmt.Sprintf("t%d", i), fmt.Sprintf("tunnel-%d", i), "healthy")
+	}
+	fake.SetTunnelStatus("t1", "down")
+
+	tunnels, err := c.ListTunnels(ctx, "acc1")
+	if err != nil || len(tunnels) != 55 {
+		t.Fatalf("%v, %d Tunnels", err, len(tunnels))
+	}
+	if tunnels[0].Status != "healthy" || len(tunnels[0].Connections) != 4 || tunnels[0].Connections[0].ColoName != "fra06" {
+		t.Fatalf("t0: %+v", tunnels[0])
+	}
+	if tunnels[1].Status != "down" || len(tunnels[1].Connections) != 0 || tunnels[1].ConnsInactiveAt == nil {
+		t.Fatalf("t1: %+v", tunnels[1])
+	}
+
+	// falsche Account-ID → verständlicher Rechte-Fehler
+	if _, err := c.ListTunnels(ctx, "falsch"); !errors.Is(err, ErrTunnelPermission) {
+		t.Fatalf("ErrTunnelPermission erwartet, bekam %v", err)
 	}
 }

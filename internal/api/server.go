@@ -41,6 +41,8 @@ type Deps struct {
 	Tracker ipTracker
 	DDNS    ddnsService
 	Zones   providers.ZoneLister // nil = Cloudflare nicht konfiguriert
+	Tunnels tunnelService        // nil = kein Tunnel-Monitoring
+	Events  eventSource          // nil = keine Live-Updates
 	Auth    *Auth
 	Log     *slog.Logger
 	Static  fs.FS
@@ -51,6 +53,8 @@ type Server struct {
 	tracker ipTracker
 	ddns    ddnsService
 	zones   providers.ZoneLister
+	tunnels tunnelService
+	events  eventSource
 	auth    *Auth
 	log     *slog.Logger
 	static  fs.FS
@@ -58,7 +62,7 @@ type Server struct {
 
 func NewServer(d Deps) *Server {
 	return &Server{store: d.Store, tracker: d.Tracker, ddns: d.DDNS, zones: d.Zones,
-		auth: d.Auth, log: d.Log, static: d.Static}
+		tunnels: d.Tunnels, events: d.Events, auth: d.Auth, log: d.Log, static: d.Static}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -88,6 +92,10 @@ func (s *Server) Routes() http.Handler {
 			r.Delete("/records/{id}", s.handleDeleteRecord)
 			r.Post("/records/{id}/sync", s.handleSyncRecord)
 			r.Get("/updates", s.handleUpdateLog)
+
+			r.Get("/tunnels", s.handleTunnels)
+			r.Post("/tunnels/refresh", s.handleTunnelsRefresh)
+			r.Get("/events", s.handleEvents)
 		})
 
 		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -50,6 +51,7 @@ type Tracker struct {
 	obs   observer
 	store changeStore
 	log   *slog.Logger
+	pub   events.Publisher
 	now   func() time.Time
 
 	checkMu sync.Mutex // serialisiert Prüfungen (Scheduler + manueller Button)
@@ -68,6 +70,9 @@ func NewTracker(obs observer, st changeStore, log *slog.Logger) *Tracker {
 		known: map[Family]netip.Addr{},
 	}
 }
+
+// SetPublisher legt fest, wer über abgeschlossene Prüfungen informiert wird.
+func (t *Tracker) SetPublisher(p events.Publisher) { t.pub = p }
 
 // SetObserver tauscht die Quellen aus (z. B. nach Änderung der Settings).
 func (t *Tracker) SetObserver(o observer) {
@@ -143,6 +148,7 @@ func (t *Tracker) Check(ctx context.Context) (State, error) {
 	t.mu.Lock()
 	t.state.LastChecked = &now
 	t.mu.Unlock()
+	events.Publish(t.pub, events.TopicIP)
 	return t.State(), errors.Join(errs...)
 }
 

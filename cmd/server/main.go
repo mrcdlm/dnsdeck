@@ -15,11 +15,13 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/api"
 	"github.com/mrcdlm/dnsdeck/internal/config"
 	"github.com/mrcdlm/dnsdeck/internal/ddns"
+	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/scheduler"
 	"github.com/mrcdlm/dnsdeck/internal/store"
+	"github.com/mrcdlm/dnsdeck/internal/tunnels"
 	"github.com/mrcdlm/dnsdeck/web"
 )
 
@@ -76,7 +78,9 @@ func run() error {
 	}
 
 	sources := ipdetect.SelectSources(ipdetect.DefaultSources(), settings.IPSources)
+	broker := events.NewBroker()
 	tracker := ipdetect.NewTracker(ipdetect.NewDetector(sources), st, log)
+	tracker.SetPublisher(broker)
 	if err := tracker.Load(ctx); err != nil {
 		return fmt.Errorf("IP-Zustand laden: %w", err)
 	}
@@ -85,14 +89,29 @@ func run() error {
 	var (
 		provider providers.Provider
 		zones    providers.ZoneLister
+		cf       *cloudflare.Client
 	)
 	if cfg.CFAPIToken != "" {
-		cf := cloudflare.New(cfg.CFAPIToken, cfg.CFAPIBaseURL)
+		cf = cloudflare.New(cfg.CFAPIToken, cfg.CFAPIBaseURL)
 		provider, zones = cf, cf
 	} else {
-		log.Warn("CF_API_TOKEN nicht gesetzt – DNS-Updates sind deaktiviert")
+		log.Warn("CF_API_TOKEN nicht gesetzt – DNS-Updates und Tunnel-Monitoring sind deaktiviert")
 	}
-	svc := &ddns.Service{Tracker: tracker, Updater: ddns.NewUpdater(st, provider, log)}
+	updater := ddns.NewUpdater(st, provider, log)
+	updater.Pub = broker
+	svc := &ddns.Service{Tracker: tracker, Updater: updater}
+
+	var tunnelClient interface {
+		ListTunnels(context.Context, string) ([]cloudflare.Tunnel, error)
+	}
+	if cf != nil { // kein typisiertes nil in das Interface stecken
+		tunnelClient = cf
+	}
+	monitor := tunnels.NewMonitor(tunnelClient, cfg.CFAccountID, st, log, broker,
+		func() time.Duration { return settings.TunnelInterval })
+	if cf != nil && cfg.CFAccountID == "" {
+		log.Warn("CF_ACCOUNT_ID nicht gesetzt – Tunnel-Monitoring ist deaktiviert")
+	}
 
 	auth, err := api.NewAuth(cfg.AppPassword, st)
 	if err != nil {
@@ -109,6 +128,13 @@ func run() error {
 			return err
 		},
 	})
+	if monitor.Configured() {
+		sched.Add(scheduler.Job{
+			Name:     "tunnels",
+			Interval: func() time.Duration { return settings.TunnelInterval },
+			Run:      monitor.Poll,
+		})
+	}
 	sched.Add(scheduler.Job{
 		Name:     "session-cleanup",
 		Interval: func() time.Duration { return time.Hour },
@@ -122,6 +148,7 @@ func run() error {
 		Addr: fmt.Sprintf(":%d", cfg.Port),
 		Handler: api.NewServer(api.Deps{
 			Store: st, Tracker: tracker, DDNS: svc, Zones: zones,
+			Tunnels: monitor, Events: broker,
 			Auth: auth, Log: log, Static: web.Dist(),
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
@@ -146,6 +173,8 @@ func run() error {
 		return err
 	}
 
+	// SSE-Verbindungen zuerst beenden – Shutdown wartet sonst auf sie.
+	broker.Close()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
