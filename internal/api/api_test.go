@@ -49,13 +49,21 @@ func (f *fakeDDNS) SyncRecord(ctx context.Context, id int64, trigger string) (st
 }
 
 type testEnv struct {
-	srv     *httptest.Server
-	tracker *fakeDDNS
-	auth    *Auth
-	cf      *cftest.Fake
-	broker  *events.Broker
-	hooks   *atomic.Int32 // Aufrufe des Test-Webhook-Empfängers
-	hookURL string        // Adresse des Test-Webhook-Empfängers
+	srv      *httptest.Server
+	tracker  *fakeDDNS
+	auth     *Auth
+	cf       *cftest.Fake
+	broker   *events.Broker
+	hooks    *atomic.Int32 // Aufrufe des Test-Webhook-Empfängers
+	hookURL  string        // Adresse des Test-Webhook-Empfängers
+	language string        // Accept-Language der Anfragen (Standard "de")
+}
+
+func (e *testEnv) lang() string {
+	if e.language == "" {
+		return "de"
+	}
+	return e.language
 }
 
 func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
@@ -111,6 +119,7 @@ func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
 func (e *testEnv) do(t *testing.T, method, path, body string, cookie *http.Cookie) *http.Response {
 	t.Helper()
 	req, _ := http.NewRequest(method, e.srv.URL+path, strings.NewReader(body))
+	req.Header.Set("Accept-Language", e.lang())
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}

@@ -3,17 +3,18 @@ package notify
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -29,7 +30,9 @@ type webhookStore interface {
 // blockieren.
 type Dispatcher struct {
 	// Pub wird nach Zustellungen informiert, damit die UI den Status live zeigt.
-	Pub     events.Publisher
+	Pub events.Publisher
+	// Lang liefert die Sprache der Benachrichtigungen (nil = Deutsch).
+	Lang    func() i18n.Lang
 	store   webhookStore
 	env     Env
 	log     *slog.Logger
@@ -81,6 +84,7 @@ func (d *Dispatcher) Notify(ev Event) {
 	if ev.Priority == 0 {
 		ev.Priority = PriorityDefault
 	}
+	ev = Localize(ev, d.lang())
 	select {
 	case d.queue <- ev:
 	default:
@@ -154,7 +158,7 @@ func (d *Dispatcher) send(ctx context.Context, r Request) error {
 	}
 	req, err := http.NewRequestWithContext(ctx, r.Method, r.URL, body)
 	if err != nil {
-		return errors.New("ungültige URL (nach Einsetzen der Env-Variablen)")
+		return i18n.E("webhook.bad_url")
 	}
 	for k, v := range r.Headers {
 		req.Header[k] = v
@@ -168,23 +172,36 @@ func (d *Dispatcher) send(ctx context.Context, r Request) error {
 		if errors.As(err, &uerr) {
 			err = uerr.Err
 		}
-		return fmt.Errorf("nicht erreichbar: %w", err)
+		return i18n.Wrap(err, "webhook.unreachable")
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		return fmt.Errorf("HTTP %d – Weiterleitung auf einen anderen Host wird aus Sicherheitsgründen nicht verfolgt", resp.StatusCode)
+		return i18n.E("webhook.redirect", "status", strconv.Itoa(resp.StatusCode))
 	}
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
+		return i18n.E("webhook.http", "status", strconv.Itoa(resp.StatusCode))
 	}
 	return nil
 }
 
+func (d *Dispatcher) lang() i18n.Lang {
+	if d.Lang == nil {
+		return i18n.DE
+	}
+	return d.Lang()
+}
+
+// Preview rendert eine Konfiguration mit Beispielereignis in der
+// Benachrichtigungssprache – ohne Geheimnisse (Platzhalter bleiben).
+func (d *Dispatcher) Preview(w store.Webhook, eventType string) (Request, error) {
+	return Render(w, Localize(SampleEvent(eventType), d.lang()), nil)
+}
+
 // TestResult ist das Ergebnis einer Testnachricht.
 type TestResult struct {
-	OK    bool   `json:"ok"`
-	Error string `json:"error,omitempty"`
+	OK    bool     `json:"ok"`
+	Error i18n.Msg `json:"-"`
 }
 
 // SendTest schickt synchron eine Testnachricht (ein Versuch) über einen Webhook,
@@ -194,12 +211,12 @@ func (d *Dispatcher) SendTest(ctx context.Context, id int64) (TestResult, error)
 	if err != nil {
 		return TestResult{}, err
 	}
-	sendErr := d.deliver(ctx, w, SampleEvent(EventTest), 1)
+	sendErr := d.deliver(ctx, w, Localize(SampleEvent(EventTest), d.lang()), 1)
 	if err := d.store.SetWebhookResult(ctx, w.ID, time.Now(), sendErr); err != nil {
 		return TestResult{}, err
 	}
 	if sendErr != nil {
-		return TestResult{Error: sendErr.Error()}, nil
+		return TestResult{Error: i18n.FromError(sendErr)}, nil
 	}
 	return TestResult{OK: true}, nil
 }

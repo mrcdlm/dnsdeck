@@ -15,6 +15,8 @@ export default defineConfig({
     baseURL: 'http://localhost:18080',
     ...devices['Desktop Chrome'],
     viewport: { width: 1280, height: 900 },
+    // Die Tests prüfen deutsche Texte; Englisch testet 06-language.spec.ts
+    locale: 'de-DE',
     permissions: ['clipboard-read', 'clipboard-write'],
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

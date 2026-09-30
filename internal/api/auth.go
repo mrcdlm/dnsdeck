@@ -56,7 +56,7 @@ func NewAuth(password string, st sessionStore) (*Auth, error) {
 		}
 	}
 	if len(password) > 72 {
-		return nil, errors.New("APP_PASSWORD darf höchstens 72 Bytes lang sein (bcrypt-Grenze)")
+		return nil, errors.New("APP_PASSWORD must not be longer than 72 bytes (bcrypt limit)")
 	}
 	h, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {

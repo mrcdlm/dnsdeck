@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 func TestWebhooksCRUD(t *testing.T) {
@@ -22,12 +24,12 @@ func TestWebhooksCRUD(t *testing.T) {
 	now := time.Now()
 	s.SetWebhookResult(ctx, w.ID, now, errors.New("HTTP 500"))
 	w, _ = s.GetWebhook(ctx, w.ID)
-	if w.LastError != "HTTP 500" || w.LastSentAt != nil {
+	if i18n.T(i18n.EN, w.LastErrorMsg) != "HTTP 500" || w.LastSentAt != nil {
 		t.Fatalf("Fehler: %+v", w)
 	}
 	s.SetWebhookResult(ctx, w.ID, now, nil)
 	w, _ = s.GetWebhook(ctx, w.ID)
-	if w.LastError != "" || w.LastSentAt == nil {
+	if !w.LastErrorMsg.IsZero() || w.LastSentAt == nil {
 		t.Fatalf("Erfolg: %+v", w)
 	}
 
@@ -36,14 +38,14 @@ func TestWebhooksCRUD(t *testing.T) {
 	w.Enabled = false
 	w.Events = []string{"ip_change"}
 	w, _ = s.UpdateWebhook(ctx, w)
-	if w.LastError != "HTTP 502" || w.LastSentAt == nil {
+	if i18n.T(i18n.EN, w.LastErrorMsg) != "HTTP 502" || w.LastSentAt == nil {
 		t.Fatalf("Status verloren: %+v", w)
 	}
 
 	// URL/Header/Body geändert → Status zurückgesetzt
 	w.Name, w.Headers, w.Events = "Neu", nil, nil
 	w, err = s.UpdateWebhook(ctx, w)
-	if err != nil || w.Name != "Neu" || w.Headers == nil || len(w.Events) != 0 || w.LastError != "" || w.LastSentAt != nil {
+	if err != nil || w.Name != "Neu" || w.Headers == nil || len(w.Events) != 0 || !w.LastErrorMsg.IsZero() || w.LastSentAt != nil {
 		t.Fatalf("update: %v %+v", err, w)
 	}
 	if list, _ := s.ListWebhooks(ctx); len(list) != 1 {

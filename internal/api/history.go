@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -21,12 +22,12 @@ func (s *Server) handleIPHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	family := r.URL.Query().Get("family")
 	if family != "" && family != "ipv4" && family != "ipv6" {
-		writeError(w, http.StatusBadRequest, "family muss ipv4 oder ipv6 sein")
+		writeMsg(w, r, http.StatusBadRequest, i18n.M("api.family_invalid"))
 		return
 	}
 	list, err := s.store.ListIPChanges(r.Context(), store.IPChangeFilter{Family: family, BeforeID: int64(before)}, limit)
 	if err != nil {
-		s.internalError(w, "IP-Verlauf lesen", err)
+		s.internalError(w, r, "IP-Verlauf lesen", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -52,14 +53,20 @@ func (s *Server) handleUpdateLog(w http.ResponseWriter, r *http.Request) {
 	}
 	result := r.URL.Query().Get("result")
 	if result != "" && !updateResults[result] {
-		writeError(w, http.StatusBadRequest, "result ungültig")
+		writeMsg(w, r, http.StatusBadRequest, i18n.M("api.invalid_param", "name", "result"))
 		return
 	}
 	entries, err := s.store.ListUpdateLog(r.Context(),
 		store.UpdateLogFilter{RecordID: int64(recID), Result: result, BeforeID: int64(before)}, limit)
 	if err != nil {
-		s.internalError(w, "Update-Log lesen", err)
+		s.internalError(w, r, "Update-Log lesen", err)
 		return
+	}
+	lang := i18n.FromRequest(r)
+	for i := range entries {
+		if !entries[i].MessageMsg.IsZero() {
+			entries[i].Message = i18n.T(lang, entries[i].MessageMsg)
+		}
 	}
 	writeJSON(w, http.StatusOK, entries)
 }
@@ -73,14 +80,14 @@ func (s *Server) handleTunnelHistory(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("before"); v != "" {
 		t, err := time.Parse(time.RFC3339Nano, v)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "before muss ein RFC3339-Zeitpunkt sein")
+			writeMsg(w, r, http.StatusBadRequest, i18n.M("api.before_invalid"))
 			return
 		}
 		f.Before = t
 	}
 	list, err := s.store.TunnelStatusChanges(r.Context(), f, limit)
 	if err != nil {
-		s.internalError(w, "Tunnel-Verlauf lesen", err)
+		s.internalError(w, r, "Tunnel-Verlauf lesen", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)

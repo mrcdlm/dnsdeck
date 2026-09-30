@@ -6,6 +6,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 // ErrConflict wird bei Verletzung einer Eindeutigkeitsbedingung zurückgegeben.
@@ -32,15 +34,20 @@ type Record struct {
 	Enabled  bool   `json:"enabled"`
 	// SettingsPending: Proxy/TTL wurden in dnsdeck geändert und sind noch
 	// nicht zu Cloudflare übertragen.
-	SettingsPending  bool       `json:"settings_pending"`
-	ProviderRecordID string     `json:"-"`
-	CurrentIP        string     `json:"current_ip,omitempty"`
-	Status           string     `json:"status"`
-	Message          string     `json:"message,omitempty"`
-	LastCheckedAt    *time.Time `json:"last_checked_at,omitempty"`
-	LastChangedAt    *time.Time `json:"last_changed_at,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	SettingsPending  bool   `json:"settings_pending"`
+	ProviderRecordID string `json:"-"`
+	CurrentIP        string `json:"current_ip,omitempty"`
+	Status           string `json:"status"`
+	// Message: gerenderter Text (von der API gesetzt bzw. Alttext);
+	// MessageMsg: übersetzbare Meldung.
+	Message    string   `json:"message,omitempty"`
+	MessageMsg i18n.Msg `json:"-"`
+	// Propagation: Ergebnis der letzten DNS-Verbreitungsprüfung (JSON).
+	Propagation   string     `json:"-"`
+	LastCheckedAt *time.Time `json:"last_checked_at,omitempty"`
+	LastChangedAt *time.Time `json:"last_changed_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 // RecordSyncState ist das Ergebnis eines Abgleichs.
@@ -48,7 +55,7 @@ type RecordSyncState struct {
 	ProviderRecordID string
 	CurrentIP        string
 	Status           string
-	Message          string
+	Message          i18n.Msg
 	CheckedAt        time.Time
 	Changed          bool // IP/Einstellungen wurden beim Provider geändert
 
@@ -61,8 +68,8 @@ type RecordSyncState struct {
 }
 
 const recordCols = `id, provider, zone_id, zone_name, name, type, proxied, ttl, enabled,
-	settings_pending, provider_record_id, current_ip, status, message, last_checked_at, last_changed_at,
-	created_at, updated_at`
+	settings_pending, provider_record_id, current_ip, status, message, message_i18n, propagation,
+	last_checked_at, last_changed_at, created_at, updated_at`
 
 func (s *Store) CreateRecord(ctx context.Context, r Record) (Record, error) {
 	now := formatTime(time.Now())
@@ -108,7 +115,7 @@ func (s *Store) UpdateRecordSettings(ctx context.Context, r Record) (Record, err
 		`UPDATE records SET
 			settings_pending = CASE WHEN proxied <> ? OR ttl <> ? THEN 1 ELSE settings_pending END,
 			zone_id = ?, zone_name = ?, name = ?, type = ?, proxied = ?, ttl = ?,
-			enabled = ?, provider_record_id = ?, status = ?, message = ?, updated_at = ?
+			enabled = ?, provider_record_id = ?, status = ?, message = ?, message_i18n = NULL, updated_at = ?
 		 WHERE id = ?`,
 		r.Proxied, r.TTL,
 		r.ZoneID, r.ZoneName, r.Name, r.Type, r.Proxied, r.TTL, r.Enabled, providerID,
@@ -141,10 +148,10 @@ func (s *Store) SetRecordSyncState(ctx context.Context, id int64, st RecordSyncS
 			ttl     = CASE WHEN ?2 IS NOT NULL AND settings_pending = 0 THEN ?2 ELSE ttl END,
 			provider_record_id = COALESCE(NULLIF(?3, ''), provider_record_id),
 			current_ip = COALESCE(NULLIF(?4, ''), current_ip),
-			status = ?5, message = NULLIF(?6, ''), last_checked_at = ?7,
+			status = ?5, message = NULL, message_i18n = NULLIF(?6, ''), last_checked_at = ?7,
 			last_changed_at = COALESCE(?8, last_changed_at)
 		 WHERE id = ?9`,
-		proxied, ttl, st.ProviderRecordID, st.CurrentIP, st.Status, st.Message,
+		proxied, ttl, st.ProviderRecordID, st.CurrentIP, st.Status, i18n.Encode(st.Message),
 		formatTime(st.CheckedAt), changedAt, id)
 	return err
 }
@@ -189,16 +196,19 @@ func scanRecord(sc scanner) (Record, error) {
 	var (
 		r                          Record
 		providerID, currentIP, msg sql.NullString
+		msgI18n, propagation       sql.NullString
 		checked, changed           sql.NullString
 		created, updated           string
 	)
 	err := sc.Scan(&r.ID, &r.Provider, &r.ZoneID, &r.ZoneName, &r.Name, &r.Type, &r.Proxied,
-		&r.TTL, &r.Enabled, &r.SettingsPending, &providerID, &currentIP, &r.Status, &msg, &checked, &changed,
+		&r.TTL, &r.Enabled, &r.SettingsPending, &providerID, &currentIP, &r.Status, &msg, &msgI18n, &propagation,
+		&checked, &changed,
 		&created, &updated)
 	if err != nil {
 		return Record{}, err
 	}
 	r.ProviderRecordID, r.CurrentIP, r.Message = providerID.String, currentIP.String, msg.String
+	r.MessageMsg, r.Propagation = i18n.Decode(msgI18n.String), propagation.String
 	if r.LastCheckedAt, err = parseNullTime(checked); err != nil {
 		return Record{}, err
 	}
@@ -229,5 +239,11 @@ func mapConstraint(err error) error {
 	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
 		return ErrConflict
 	}
+	return err
+}
+
+// SetRecordPropagation speichert das Ergebnis einer Verbreitungsprüfung (JSON).
+func (s *Store) SetRecordPropagation(ctx context.Context, id int64, resultJSON string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE records SET propagation = NULLIF(?, '') WHERE id = ?`, resultJSON, id)
 	return err
 }

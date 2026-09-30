@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
@@ -22,6 +23,7 @@ type webhookStore interface {
 
 type webhookTester interface {
 	SendTest(ctx context.Context, id int64) (notify.TestResult, error)
+	Preview(w store.Webhook, eventType string) (notify.Request, error)
 }
 
 // webhookDTO ergänzt die gespeicherte Konfiguration um verwendete, aber nicht
@@ -31,7 +33,10 @@ type webhookDTO struct {
 	MissingEnv []string `json:"missing_env"`
 }
 
-func (s *Server) toWebhookDTO(w store.Webhook) webhookDTO {
+func (s *Server) toWebhookDTO(w store.Webhook, lang i18n.Lang) webhookDTO {
+	if !w.LastErrorMsg.IsZero() {
+		w.LastError = i18n.T(lang, w.LastErrorMsg)
+	}
 	missing := []string{}
 	if s.webhookEnv != nil {
 		if m := notify.MissingEnv(w, s.webhookEnv); m != nil {
@@ -85,12 +90,12 @@ func (s *Server) webhookChanged() {
 func (s *Server) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
 	list, err := s.store.ListWebhooks(r.Context())
 	if err != nil {
-		s.internalError(w, "Webhooks lesen", err)
+		s.internalError(w, r, "Webhooks lesen", err)
 		return
 	}
 	out := make([]webhookDTO, len(list))
 	for i, wh := range list {
-		out[i] = s.toWebhookDTO(wh)
+		out[i] = s.toWebhookDTO(wh, i18n.FromRequest(r))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -102,8 +107,9 @@ func decodeWebhook(w http.ResponseWriter, r *http.Request) (store.Webhook, bool)
 		return store.Webhook{}, false
 	}
 	wh := in.toWebhook()
-	if err := notify.Validate(wh); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	var verr *notify.ValidationError
+	if err := notify.Validate(wh); errors.As(err, &verr) {
+		writeMsgs(w, r, http.StatusBadRequest, verr.Msgs)
 		return store.Webhook{}, false
 	}
 	return wh, true
@@ -116,12 +122,12 @@ func (s *Server) handleCreateWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.store.CreateWebhook(r.Context(), wh)
 	if err != nil {
-		s.internalError(w, "Webhook anlegen", err)
+		s.internalError(w, r, "Webhook anlegen", err)
 		return
 	}
 	s.log.Info("Webhook angelegt", "webhook", created.Name)
 	s.webhookChanged()
-	writeJSON(w, http.StatusCreated, s.toWebhookDTO(created))
+	writeJSON(w, http.StatusCreated, s.toWebhookDTO(created, i18n.FromRequest(r)))
 }
 
 func (s *Server) handleUpdateWebhook(w http.ResponseWriter, r *http.Request) {
@@ -136,15 +142,15 @@ func (s *Server) handleUpdateWebhook(w http.ResponseWriter, r *http.Request) {
 	wh.ID = id
 	updated, err := s.store.UpdateWebhook(r.Context(), wh)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Webhook nicht gefunden")
+		writeMsg(w, r, http.StatusNotFound, i18n.M("webhook.not_found"))
 		return
 	}
 	if err != nil {
-		s.internalError(w, "Webhook ändern", err)
+		s.internalError(w, r, "Webhook ändern", err)
 		return
 	}
 	s.webhookChanged()
-	writeJSON(w, http.StatusOK, s.toWebhookDTO(updated))
+	writeJSON(w, http.StatusOK, s.toWebhookDTO(updated, i18n.FromRequest(r)))
 }
 
 func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
@@ -154,11 +160,11 @@ func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	err := s.store.DeleteWebhook(r.Context(), id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Webhook nicht gefunden")
+		writeMsg(w, r, http.StatusNotFound, i18n.M("webhook.not_found"))
 		return
 	}
 	if err != nil {
-		s.internalError(w, "Webhook löschen", err)
+		s.internalError(w, r, "Webhook löschen", err)
 		return
 	}
 	s.webhookChanged()
@@ -171,22 +177,22 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.webhooks == nil {
-		writeError(w, http.StatusServiceUnavailable, "Webhooks nicht verfügbar")
+		writeMsg(w, r, http.StatusServiceUnavailable, i18n.M("webhook.unavailable"))
 		return
 	}
 	ctx, cancel := detached(r)
 	defer cancel()
 	res, err := s.webhooks.SendTest(ctx, id)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "Webhook nicht gefunden")
+		writeMsg(w, r, http.StatusNotFound, i18n.M("webhook.not_found"))
 		return
 	}
 	if err != nil {
-		s.internalError(w, "Webhook testen", err)
+		s.internalError(w, r, "Webhook testen", err)
 		return
 	}
 	s.webhookChanged()
-	writeJSON(w, http.StatusOK, res)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": res.OK, "error": i18n.T(i18n.FromRequest(r), res.Error)})
 }
 
 // handlePreviewWebhook rendert eine (auch ungespeicherte) Konfiguration mit
@@ -199,9 +205,17 @@ func (s *Server) handlePreviewWebhook(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	req, err := notify.Render(in.toWebhook(), notify.SampleEvent(in.EventType), nil)
+	var (
+		req notify.Request
+		err error
+	)
+	if s.webhooks != nil {
+		req, err = s.webhooks.Preview(in.toWebhook(), in.EventType) // in der Benachrichtigungssprache
+	} else {
+		req, err = notify.Render(in.toWebhook(), notify.Localize(notify.SampleEvent(in.EventType), i18n.DE), nil)
+	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeMsg(w, r, http.StatusBadRequest, i18n.FromError(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, req)

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
@@ -22,13 +23,15 @@ const (
 )
 
 type FamilyState struct {
-	IP        string        `json:"ip,omitempty"`    // zuletzt bestätigte IP
-	Since     *time.Time    `json:"since,omitempty"` // seit wann diese IP gilt
-	Status    string        `json:"status"`
-	Message   string        `json:"message,omitempty"`
-	Votes     int           `json:"votes"`
-	Responses int           `json:"responses"`
-	Sources   []Observation `json:"sources"`
+	IP     string     `json:"ip,omitempty"`    // zuletzt bestätigte IP
+	Since  *time.Time `json:"since,omitempty"` // seit wann diese IP gilt
+	Status string     `json:"status"`
+	// Message: von der API gerenderter Text; MessageMsg: übersetzbare Meldung.
+	Message    string        `json:"message,omitempty"`
+	MessageMsg i18n.Msg      `json:"-"`
+	Votes      int           `json:"votes"`
+	Responses  int           `json:"responses"`
+	Sources    []Observation `json:"sources"`
 }
 
 type State struct {
@@ -181,9 +184,9 @@ func (t *Tracker) apply(ctx context.Context, f Family, addrs []netip.Addr, obs [
 				label := map[Family]string{IPv4: "IPv4", IPv6: "IPv6"}[f]
 				notify.Send(t.Notifier, notify.Event{
 					Type: notify.EventIPChange, Priority: notify.PriorityDefault, Time: now,
-					Title:   "Neue öffentliche " + label + "-Adresse",
-					Message: c.PreviousIP + " → " + c.IP,
-					Data:    map[string]string{"family": string(f), "old": c.PreviousIP, "new": c.IP},
+					TitleMsg:   i18n.M("notify.ip_change.title", "family", label),
+					MessageMsg: i18n.M("notify.ip_change.message", "old", c.PreviousIP, "new", c.IP),
+					Data:       map[string]string{"family": string(f), "old": c.PreviousIP, "new": c.IP},
 				})
 			}
 		}
@@ -198,7 +201,7 @@ func (t *Tracker) apply(ctx context.Context, f Family, addrs []netip.Addr, obs [
 	}
 	switch {
 	case d.Confirmed():
-		fs.Status, fs.Message = StatusOK, ""
+		fs.Status, fs.MessageMsg = StatusOK, i18n.Msg{}
 		if changed {
 			t.known[f] = d.IP
 			fs.IP = d.IP.String()
@@ -206,13 +209,13 @@ func (t *Tracker) apply(ctx context.Context, f Family, addrs []netip.Addr, obs [
 			fs.Since = &since
 		}
 	case d.Total == 0:
-		fs.Status, fs.Message = StatusUnavailable, d.Reason
+		fs.Status, fs.MessageMsg = StatusUnavailable, d.Reason
 	default:
-		fs.Status, fs.Message = StatusUnconfirmed, d.Reason
-		t.log.Warn("IP nicht bestätigt", "family", f, "reason", d.Reason)
+		fs.Status, fs.MessageMsg = StatusUnconfirmed, d.Reason
+		t.log.Warn("IP nicht bestätigt", "family", f, "reason", i18n.T(i18n.EN, d.Reason))
 	}
 	if persistErr != nil {
-		fs.Status, fs.Message = StatusUnconfirmed, "Speichern fehlgeschlagen"
+		fs.Status, fs.MessageMsg = StatusUnconfirmed, i18n.M("ip.save_failed")
 	}
 	return persistErr
 }
@@ -223,4 +226,20 @@ func (t *Tracker) familyState(f Family) *FamilyState {
 		return &t.state.IPv6
 	}
 	return &t.state.IPv4
+}
+
+// Localize liefert eine Kopie mit gerenderten Texten in lang.
+func (s State) Localize(lang i18n.Lang) State {
+	loc := func(f FamilyState) FamilyState {
+		f.Message = i18n.T(lang, f.MessageMsg)
+		src := make([]Observation, len(f.Sources))
+		for i, o := range f.Sources {
+			o.Error = i18n.T(lang, o.ErrorMsg)
+			src[i] = o
+		}
+		f.Sources = src
+		return f
+	}
+	s.IPv4, s.IPv6 = loc(s.IPv4), loc(s.IPv6)
+	return s
 }

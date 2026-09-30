@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"time"
+
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 type Header struct {
@@ -24,13 +26,16 @@ type Webhook struct {
 	BodyTemplate string     `json:"body_template"`
 	Events       []string   `json:"events"`
 	LastSentAt   *time.Time `json:"last_sent_at,omitempty"`
-	LastError    string     `json:"last_error,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	// LastError: gerenderter Text (von der API gesetzt bzw. Alttext);
+	// LastErrorMsg: übersetzbare Meldung.
+	LastError    string    `json:"last_error,omitempty"`
+	LastErrorMsg i18n.Msg  `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 const webhookCols = `id, name, enabled, method, url, headers, content_type, body_template, events,
-	last_sent_at, last_error, created_at, updated_at`
+	last_sent_at, last_error, last_error_i18n, created_at, updated_at`
 
 func (s *Store) CreateWebhook(ctx context.Context, w Webhook) (Webhook, error) {
 	headers, events := marshalWebhookLists(w)
@@ -60,6 +65,8 @@ func (s *Store) UpdateWebhook(ctx context.Context, w Webhook) (Webhook, error) {
 		`UPDATE webhooks SET
 			last_error   = CASE WHEN method <> ?3 OR url <> ?4 OR headers <> ?5 OR content_type <> ?6 OR body_template <> ?7
 			               THEN NULL ELSE last_error END,
+			last_error_i18n = CASE WHEN method <> ?3 OR url <> ?4 OR headers <> ?5 OR content_type <> ?6 OR body_template <> ?7
+			               THEN NULL ELSE last_error_i18n END,
 			last_sent_at = CASE WHEN method <> ?3 OR url <> ?4 OR headers <> ?5 OR content_type <> ?6 OR body_template <> ?7
 			               THEN NULL ELSE last_sent_at END,
 			name = ?1, enabled = ?2, method = ?3, url = ?4, headers = ?5, content_type = ?6,
@@ -91,9 +98,10 @@ func (s *Store) DeleteWebhook(ctx context.Context, id int64) error {
 func (s *Store) SetWebhookResult(ctx context.Context, id int64, at time.Time, deliveryErr error) error {
 	var err error
 	if deliveryErr != nil {
-		_, err = s.db.ExecContext(ctx, `UPDATE webhooks SET last_error = ? WHERE id = ?`, deliveryErr.Error(), id)
+		_, err = s.db.ExecContext(ctx, `UPDATE webhooks SET last_error = NULL, last_error_i18n = ? WHERE id = ?`,
+			i18n.Encode(i18n.FromError(deliveryErr)), id)
 	} else {
-		_, err = s.db.ExecContext(ctx, `UPDATE webhooks SET last_sent_at = ?, last_error = NULL WHERE id = ?`,
+		_, err = s.db.ExecContext(ctx, `UPDATE webhooks SET last_sent_at = ?, last_error = NULL, last_error_i18n = NULL WHERE id = ?`,
 			formatTime(at), id)
 	}
 	return err
@@ -141,10 +149,11 @@ func scanWebhook(sc scanner) (Webhook, error) {
 		w                Webhook
 		headers, events  string
 		lastSent, lastEr sql.NullString
+		lastErI18n       sql.NullString
 		created, updated string
 	)
 	if err := sc.Scan(&w.ID, &w.Name, &w.Enabled, &w.Method, &w.URL, &headers, &w.ContentType,
-		&w.BodyTemplate, &events, &lastSent, &lastEr, &created, &updated); err != nil {
+		&w.BodyTemplate, &events, &lastSent, &lastEr, &lastErI18n, &created, &updated); err != nil {
 		return Webhook{}, err
 	}
 	if err := json.Unmarshal([]byte(headers), &w.Headers); err != nil {
@@ -153,7 +162,7 @@ func scanWebhook(sc scanner) (Webhook, error) {
 	if err := json.Unmarshal([]byte(events), &w.Events); err != nil {
 		return Webhook{}, err
 	}
-	w.LastError = lastEr.String
+	w.LastError, w.LastErrorMsg = lastEr.String, i18n.Decode(lastErI18n.String)
 	var err error
 	if w.LastSentAt, err = parseNullTime(lastSent); err != nil {
 		return Webhook{}, err

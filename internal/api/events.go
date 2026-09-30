@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"net/http"
 	"time"
 )
@@ -19,7 +20,7 @@ var heartbeatInterval = 25 * time.Second
 // geänderte Thema; der Client lädt die Daten über die API neu.
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if s.events == nil {
-		writeError(w, http.StatusServiceUnavailable, "Live-Updates nicht verfügbar")
+		writeMsg(w, r, http.StatusServiceUnavailable, i18n.M("api.live_unavailable"))
 		return
 	}
 	rc := http.NewResponseController(w)

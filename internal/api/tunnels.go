@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/tunnels"
 )
 
@@ -20,9 +21,10 @@ func (s *Server) handleTunnels(w http.ResponseWriter, r *http.Request) {
 	}
 	o, err := s.tunnels.Overview(r.Context())
 	if err != nil {
-		s.internalError(w, "Tunnels lesen", err)
+		s.internalError(w, r, "Tunnels lesen", err)
 		return
 	}
+	o.Error = i18n.T(i18n.FromRequest(r), o.ErrorMsg)
 	writeJSON(w, http.StatusOK, o)
 }
 
@@ -30,7 +32,7 @@ func (s *Server) handleTunnels(w http.ResponseWriter, r *http.Request) {
 // HTTP-Fehler: er steht in Overview.Error, der letzte Stand bleibt sichtbar.
 func (s *Server) handleTunnelsRefresh(w http.ResponseWriter, r *http.Request) {
 	if s.tunnels == nil || !s.tunnels.Configured() {
-		writeError(w, http.StatusServiceUnavailable, "Tunnel-Monitoring nicht konfiguriert (CF_API_TOKEN/CF_ACCOUNT_ID)")
+		writeMsg(w, r, http.StatusServiceUnavailable, i18n.M("tunnels.not_configured"))
 		return
 	}
 	ctx, cancel := detached(r)

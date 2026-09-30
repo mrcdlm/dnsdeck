@@ -134,7 +134,7 @@ func TestMonitor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !o.Configured || o.Error != "" || o.LastPoll == nil || len(o.Tunnels) != 1 {
+	if !o.Configured || !o.ErrorMsg.IsZero() || o.LastPoll == nil || len(o.Tunnels) != 1 {
 		t.Fatalf("overview: %+v", o)
 	}
 	home := o.Tunnels[0]
@@ -155,7 +155,7 @@ func TestMonitor(t *testing.T) {
 	if err := m.Poll(ctx); err == nil {
 		t.Fatal("Fehler erwartet")
 	}
-	if o, _ := m.Overview(ctx); o.Error == "" || len(o.Tunnels) != 1 {
+	if o, _ := m.Overview(ctx); o.ErrorMsg.IsZero() || len(o.Tunnels) != 1 {
 		t.Fatalf("nach Fehler: %+v", o)
 	}
 }

@@ -7,11 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
@@ -109,11 +109,11 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 			fam = "IPv6"
 		}
 		return u.store.SetRecordSyncState(ctx, r.ID, store.RecordSyncState{
-			Status: store.RecordSkipped, Message: "keine öffentliche " + fam + "-Adresse bekannt", CheckedAt: now})
+			Status: store.RecordSkipped, Message: i18n.M("ddns.no_ip", "family", fam), CheckedAt: now})
 	}
 
 	if u.provider == nil {
-		return u.fail(ctx, r, ip, trigger, now, fmt.Errorf("%w: CF_API_TOKEN nicht gesetzt", providers.ErrNotConfigured))
+		return u.fail(ctx, r, ip, trigger, now, &i18n.Error{Msg: i18n.M("cf.not_configured"), Wrap: providers.ErrNotConfigured})
 	}
 
 	// Ist-Zustand beim Anbieter abfragen – geändert wird nur bei Abweichung.
@@ -125,7 +125,7 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 			return u.fail(ctx, r, ip, trigger, now, err)
 		}
 		u.log.Info("DNS-Eintrag angelegt", "record", r.Name, "type", r.Type, "ip", ip)
-		u.writeLog(ctx, r, trigger, store.ResultCreated, "", ip, "bei Cloudflare angelegt", now)
+		u.writeLog(ctx, r, trigger, store.ResultCreated, "", ip, i18n.M("ddns.created"), now)
 		u.recovered(ctx, r, trigger, ip, now)
 		return u.store.SetRecordSyncState(ctx, r.ID, synced(created, now, true))
 	}
@@ -147,7 +147,7 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 
 	if !ipDiffers && len(changes) == 0 {
 		if adopting {
-			msg := fmt.Sprintf("bestehenden Eintrag übernommen (Proxy %s, TTL %s)", onOff(cur.Proxied), FormatTTL(cur.TTL))
+			msg := i18n.M("ddns.adopted", "proxy", onOff(cur.Proxied), "ttl", FormatTTL(cur.TTL))
 			u.log.Info("DNS-Eintrag übernommen", "record", r.Name, "type", r.Type, "proxied", cur.Proxied, "ttl", cur.TTL)
 			u.writeLog(ctx, r, trigger, store.ResultAdopted, cur.Content, cur.Content, msg, now)
 		} else if !r.SettingsPending && (cur.Proxied != r.Proxied || (!cur.Proxied && cur.TTL != r.TTL)) {
@@ -163,11 +163,12 @@ func (u *Updater) sync(ctx context.Context, r store.Record, ips IPs, trigger str
 		return u.fail(ctx, r, ip, trigger, now, err)
 	}
 	if adopting {
-		changes = append([]string{"bestehenden Eintrag übernommen"}, changes...)
+		changes = append([]i18n.Msg{i18n.M("ddns.adopted_short")}, changes...)
 	}
+	msg := i18n.JoinMsgs(changes...)
 	u.log.Info("DNS-Eintrag aktualisiert", "record", r.Name, "type", r.Type,
-		"old", cur.Content, "new", ip, "changes", strings.Join(changes, "; "))
-	u.writeLog(ctx, r, trigger, store.ResultUpdated, cur.Content, ip, strings.Join(changes, "; "), now)
+		"old", cur.Content, "new", ip, "changes", i18n.T(i18n.EN, msg))
+	u.writeLog(ctx, r, trigger, store.ResultUpdated, cur.Content, ip, msg, now)
 	u.recovered(ctx, r, trigger, ip, now)
 	return u.store.SetRecordSyncState(ctx, r.ID, synced(upd, now, true))
 }
@@ -178,18 +179,29 @@ func (u *Updater) recovered(ctx context.Context, r store.Record, trigger, ip str
 	if r.Status != store.RecordError {
 		return
 	}
-	msg := "Abgleich wieder erfolgreich"
-	if r.Message != "" {
-		msg += " (vorher: " + r.Message + ")"
+	msg := i18n.M("ddns.recovered")
+	if prev := previousMsg(r); !prev.IsZero() {
+		msg = i18n.M("ddns.recovered_after", "detail", i18n.Nest(prev))
 	}
 	u.log.Info("DNS-Abgleich wieder erfolgreich", "record", r.Name, "type", r.Type)
 	u.writeLog(ctx, r, trigger, store.ResultRecovered, ip, ip, msg, now)
 	notify.Send(u.Notifier, notify.Event{
 		Type: notify.EventUpdateRecovered, Priority: notify.PriorityDefault, Time: now,
-		Title:   fmt.Sprintf("DNS-Update wieder OK: %s (%s)", r.Name, r.Type),
-		Message: fmt.Sprintf("%s zeigt auf %s.", r.Name, ip),
-		Data:    map[string]string{"record": r.Name, "type": r.Type, "ip": ip},
+		TitleMsg:   i18n.M("notify.update_recovered.title", "name", r.Name, "type", r.Type),
+		MessageMsg: i18n.M("notify.update_recovered.message", "name", r.Name, "ip", ip),
+		Data:       map[string]string{"record": r.Name, "type": r.Type, "ip": ip},
 	})
+}
+
+// previousMsg liefert die gespeicherte Meldung eines Records (Alttext als Rohtext).
+func previousMsg(r store.Record) i18n.Msg {
+	if !r.MessageMsg.IsZero() {
+		return r.MessageMsg
+	}
+	if r.Message != "" {
+		return i18n.Raw(r.Message)
+	}
+	return i18n.Msg{}
 }
 
 // synced beschreibt einen erfolgreichen Abgleich mit dem Stand beim Anbieter.
@@ -201,22 +213,23 @@ func synced(p providers.Record, now time.Time, changed bool) store.RecordSyncSta
 
 // settingChanges beschreibt Proxy-/TTL-Unterschiede, z. B. "Proxy: aus → an".
 // Bei proxied Einträgen setzt Cloudflare die TTL selbst; sie zählt dann nicht.
-func settingChanges(cur, want providers.Record) []string {
-	var out []string
+func settingChanges(cur, want providers.Record) []i18n.Msg {
+	var out []i18n.Msg
 	if cur.Proxied != want.Proxied {
-		out = append(out, fmt.Sprintf("Proxy: %s → %s", onOff(cur.Proxied), onOff(want.Proxied)))
+		out = append(out, i18n.M("ddns.proxy_change", "from", onOff(cur.Proxied), "to", onOff(want.Proxied)))
 	}
 	if !want.Proxied && cur.TTL != want.TTL {
-		out = append(out, fmt.Sprintf("TTL: %s → %s", FormatTTL(cur.TTL), FormatTTL(want.TTL)))
+		out = append(out, i18n.M("ddns.ttl_change", "from", FormatTTL(cur.TTL), "to", FormatTTL(want.TTL)))
 	}
 	return out
 }
 
+// onOff liefert einen übersetzbaren Verweis auf "an"/"aus".
 func onOff(b bool) string {
 	if b {
-		return "an"
+		return i18n.Ref("state.on")
 	}
-	return "aus"
+	return i18n.Ref("state.off")
 }
 
 // FormatTTL formatiert eine TTL wie im Frontend (1 = automatisch).
@@ -238,29 +251,30 @@ func FormatTTL(ttl int) string {
 // sich vom vorherigen unterscheidet – sonst füllt ein dauerhafter Fehler das
 // Log alle paar Minuten mit demselben Eintrag.
 func (u *Updater) fail(ctx context.Context, r store.Record, ip, trigger string, now time.Time, cause error) error {
-	msg := cause.Error()
-	repeated := r.Status == store.RecordError && r.Message == msg
+	msg := i18n.FromError(cause)
+	repeated := r.Status == store.RecordError && i18n.Equal(previousMsg(r), msg)
 	if !repeated || trigger != store.TriggerScheduled {
-		u.log.Warn("DNS-Update fehlgeschlagen", "record", r.Name, "type", r.Type, "err", msg)
+		u.log.Warn("DNS-Update fehlgeschlagen", "record", r.Name, "type", r.Type, "err", cause)
 		u.writeLog(ctx, r, trigger, store.ResultError, r.CurrentIP, ip, msg, now)
 	}
 	if !repeated {
 		notify.Send(u.Notifier, notify.Event{
 			Type: notify.EventUpdateFailed, Priority: notify.PriorityHigh, Time: now,
-			Title:   fmt.Sprintf("DNS-Update fehlgeschlagen: %s (%s)", r.Name, r.Type),
-			Message: fmt.Sprintf("Soll-IP %s: %s", ip, msg),
-			Data:    map[string]string{"record": r.Name, "type": r.Type, "ip": ip, "error": msg},
+			TitleMsg:   i18n.M("notify.update_failed.title", "name", r.Name, "type", r.Type),
+			MessageMsg: i18n.M("notify.update_failed.message", "ip", ip, "detail", i18n.Nest(msg)),
+			// Data.error bewusst englisch: maschinenlesbar, unabhängig von der Sprache
+			Data: map[string]string{"record": r.Name, "type": r.Type, "ip": ip, "error": cause.Error()},
 		})
 	}
 	return u.store.SetRecordSyncState(ctx, r.ID, store.RecordSyncState{
 		Status: store.RecordError, Message: msg, CheckedAt: now})
 }
 
-func (u *Updater) writeLog(ctx context.Context, r store.Record, trigger, result, oldIP, newIP, msg string, now time.Time) {
+func (u *Updater) writeLog(ctx context.Context, r store.Record, trigger, result, oldIP, newIP string, msg i18n.Msg, now time.Time) {
 	id := r.ID
 	_, err := u.store.InsertUpdateLog(ctx, store.UpdateLogEntry{
 		RecordID: &id, RecordName: r.Name, RecordType: r.Type, Trigger: trigger, Result: result,
-		OldIP: oldIP, NewIP: newIP, Message: msg, CreatedAt: now})
+		OldIP: oldIP, NewIP: newIP, MessageMsg: msg, CreatedAt: now})
 	if err != nil {
 		u.log.Error("Update-Log schreiben fehlgeschlagen", "err", err)
 		return

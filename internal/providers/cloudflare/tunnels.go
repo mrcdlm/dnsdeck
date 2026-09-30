@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 type TunnelConnection struct {
@@ -34,7 +36,7 @@ type Tunnel struct {
 
 // ErrTunnelPermission: dem Token fehlt Account → Cloudflare Tunnel → Read
 // oder die Account-ID stimmt nicht.
-var ErrTunnelPermission = errors.New("kein Zugriff auf Tunnels – Token braucht Account → Cloudflare Tunnel → Read und CF_ACCOUNT_ID muss stimmen")
+var ErrTunnelPermission = errors.New("no access to tunnels")
 
 // ListTunnels liefert alle nicht gelöschten Tunnels des Accounts.
 func (c *Client) ListTunnels(ctx context.Context, accountID string) ([]Tunnel, error) {
@@ -45,7 +47,8 @@ func (c *Client) ListTunnels(ctx context.Context, accountID string) ([]Tunnel, e
 		if err != nil {
 			var apiErr *APIError
 			if errors.As(err, &apiErr) && (apiErr.Status == http.StatusForbidden || apiErr.Status == http.StatusUnauthorized) {
-				return nil, fmt.Errorf("%w (%v)", ErrTunnelPermission, err)
+				return nil, &i18n.Error{Wrap: ErrTunnelPermission,
+					Msg: i18n.M("cf.tunnel_permission", "detail", i18n.Nest(apiErr.LocalizedMsg()))}
 			}
 			return nil, err
 		}

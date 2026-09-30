@@ -40,20 +40,20 @@ func Load(getenv func(string) string) (*Config, error) {
 	if v := getenv("PORT"); v != "" {
 		p, err := strconv.Atoi(v)
 		if err != nil || p < 1 || p > 65535 {
-			return nil, fmt.Errorf("PORT ungültig: %q", v)
+			return nil, fmt.Errorf("invalid PORT: %q", v)
 		}
 		c.Port = p
 	}
 	if v := getenv("LOG_LEVEL"); v != "" {
 		if err := c.LogLevel.UnmarshalText([]byte(strings.ToLower(v))); err != nil {
-			return nil, fmt.Errorf("LOG_LEVEL ungültig: %q", v)
+			return nil, fmt.Errorf("invalid LOG_LEVEL: %q", v)
 		}
 	}
 	if v := getenv("DATA_DIR"); v != "" {
 		c.DataDir = v
 	}
 	if c.AppPassword == "" {
-		return nil, errors.New("APP_PASSWORD muss gesetzt sein")
+		return nil, errors.New("APP_PASSWORD must be set")
 	}
 	return c, nil
 }

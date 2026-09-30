@@ -3,16 +3,16 @@ package notify
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -33,14 +33,14 @@ var (
 	headerNameRe = regexp.MustCompile("^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 )
 
-// ValidationError ist ein Konfigurationsfehler, der dem Benutzer angezeigt wird.
-type ValidationError struct{ Msg string }
+// ValidationError sind Konfigurationsfehler, die dem Benutzer angezeigt werden.
+type ValidationError struct{ Msgs []i18n.Msg }
 
-func (e *ValidationError) Error() string { return e.Msg }
+func (e *ValidationError) Error() string { return i18n.Join(i18n.EN, e.Msgs) }
 
 func checkEnvName(name string) error {
 	if !strings.HasPrefix(name, EnvPrefix) || len(name) == len(EnvPrefix) {
-		return fmt.Errorf("nur Env-Variablen mit Präfix %s sind erlaubt (nicht %q)", EnvPrefix, name)
+		return i18n.E("webhook.env_prefix", "prefix", EnvPrefix, "name", strconv.Quote(name))
 	}
 	return nil
 }
@@ -48,20 +48,23 @@ func checkEnvName(name string) error {
 // expand ersetzt ${WEBHOOK_…} in s. Nur für Text aus der Konfiguration –
 // nie für Ereignisdaten, sonst ließen sich Geheimnisse einschleusen.
 func expand(s string, env Env) (string, error) {
-	var errs []error
+	var msgs []i18n.Msg
 	out := placeholderRe.ReplaceAllStringFunc(s, func(m string) string {
 		name := placeholderRe.FindStringSubmatch(m)[1]
 		if err := checkEnvName(name); err != nil {
-			errs = append(errs, err)
+			msgs = append(msgs, i18n.FromError(err))
 			return ""
 		}
 		v, ok := env(name)
 		if !ok {
-			errs = append(errs, fmt.Errorf("Env-Variable %s ist nicht gesetzt", name))
+			msgs = append(msgs, i18n.M("webhook.env_missing", "name", name))
 		}
 		return v
 	})
-	return out, errors.Join(errs...)
+	if len(msgs) > 0 {
+		return out, &i18n.Error{Msg: i18n.JoinMsgs(msgs...)}
+	}
+	return out, nil
 }
 
 // ReferencedEnv liefert alle Env-Variablen, die ein Webhook verwendet.
@@ -125,7 +128,7 @@ func funcs(env Env) template.FuncMap {
 			}
 			v, ok := env(name)
 			if !ok {
-				return "", fmt.Errorf("Env-Variable %s ist nicht gesetzt", name)
+				return "", i18n.E("webhook.env_missing", "name", name)
 			}
 			return v, nil
 		},
@@ -161,17 +164,17 @@ func Render(w store.Webhook, ev Event, env Env) (Request, error) {
 		req.URL, err = expand(w.URL, env)
 	}
 	if err != nil {
-		return Request{}, fmt.Errorf("URL: %w", err)
+		return Request{}, i18n.Wrap(err, "webhook.in_url")
 	}
 
 	for _, h := range w.Headers {
 		v := h.Value
 		if !preview {
 			if v, err = expand(h.Value, env); err != nil {
-				return Request{}, fmt.Errorf("Header %s: %w", h.Name, err)
+				return Request{}, i18n.Wrap(err, "webhook.in_header", "name", h.Name)
 			}
 		} else if _, err = expand(h.Value, env); err != nil {
-			return Request{}, fmt.Errorf("Header %s: %w", h.Name, err)
+			return Request{}, i18n.Wrap(err, "webhook.in_header", "name", h.Name)
 		}
 		req.Headers.Add(h.Name, v)
 	}
@@ -199,16 +202,16 @@ func renderBody(w store.Webhook, ev Event, env Env, checkJSON bool) (string, err
 	}
 	tpl, err := template.New("body").Funcs(funcs(env)).Option("missingkey=zero").Parse(w.BodyTemplate)
 	if err != nil {
-		return "", fmt.Errorf("Template: %w", err)
+		return "", i18n.Wrap(err, "webhook.template")
 	}
 	var buf bytes.Buffer
 	data := templateData{Type: ev.Type, Title: ev.Title, Message: ev.Message, Priority: ev.Priority,
 		Time: ev.Time, Data: ev.Data}
 	if err := tpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("Template: %w", err)
+		return "", i18n.Wrap(err, "webhook.template")
 	}
 	if checkJSON && strings.Contains(strings.ToLower(w.ContentType), "json") && !json.Valid(buf.Bytes()) {
-		return "", errors.New("Template ergibt kein gültiges JSON – Texte mit {{json .Title}} einsetzen")
+		return "", i18n.E("webhook.template_json")
 	}
 	return buf.String(), nil
 }
@@ -216,41 +219,42 @@ func renderBody(w store.Webhook, ev Event, env Env, checkJSON bool) (string, err
 // Validate prüft die Konfiguration und rendert sie probeweise für alle
 // Ereignistypen (ohne Geheimnisse).
 func Validate(w store.Webhook) error {
-	var msgs []string
+	var msgs []i18n.Msg
+	add := func(code string, kv ...string) { msgs = append(msgs, i18n.M(code, kv...)) }
 	if strings.TrimSpace(w.Name) == "" || len(w.Name) > 100 {
-		msgs = append(msgs, "Name fehlt oder ist zu lang")
+		add("webhook.name_invalid")
 	}
 	if !slices.Contains(Methods, w.Method) {
-		msgs = append(msgs, "Methode muss POST, PUT, PATCH oder GET sein")
+		add("webhook.method_invalid")
 	}
 	// URL: Platzhalter durch Dummy ersetzen und prüfen; eine URL, die nur aus
 	// einem Platzhalter besteht (z. B. Discord), wird erst beim Senden geprüft.
 	if strings.TrimSpace(w.URL) == "" {
-		msgs = append(msgs, "URL fehlt")
+		add("webhook.url_missing")
 	} else if !placeholderRe.MatchString(strings.TrimSpace(w.URL)) || placeholderRe.ReplaceAllString(w.URL, "") != "" {
 		dummy := placeholderRe.ReplaceAllString(w.URL, "x")
 		if u, err := url.Parse(dummy); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			msgs = append(msgs, "URL muss mit http:// oder https:// beginnen")
+			add("webhook.url_scheme")
 		}
 	}
 	for _, h := range w.Headers {
 		switch {
 		case !headerNameRe.MatchString(h.Name):
-			msgs = append(msgs, fmt.Sprintf("ungültiger Header-Name %q", h.Name))
+			add("webhook.header_name", "name", strconv.Quote(h.Name))
 		case strings.EqualFold(h.Name, "Host") || strings.EqualFold(h.Name, "Content-Length"):
-			msgs = append(msgs, fmt.Sprintf("Header %s ist nicht erlaubt", h.Name))
+			add("webhook.header_forbidden", "name", h.Name)
 		case strings.ContainsAny(h.Value, "\r\n"):
-			msgs = append(msgs, fmt.Sprintf("Header %s enthält einen Zeilenumbruch", h.Name))
+			add("webhook.header_newline", "name", h.Name)
 		}
 	}
 	for _, e := range w.Events {
 		if !slices.Contains(EventTypes, e) {
-			msgs = append(msgs, fmt.Sprintf("unbekanntes Ereignis %q", e))
+			add("webhook.event_unknown", "name", strconv.Quote(e))
 		}
 	}
 	for _, n := range ReferencedEnv(w) {
 		if err := checkEnvName(n); err != nil {
-			msgs = append(msgs, err.Error())
+			msgs = append(msgs, i18n.FromError(err))
 		}
 	}
 	msgs = append(msgs, plainSecrets(w)...)
@@ -259,20 +263,21 @@ func Validate(w store.Webhook) error {
 		// Anführungszeichen als auch ungequotet (Zahl) gültiges JSON.
 		zero := func(string) (string, bool) { return "0", true }
 		for _, t := range append(slices.Clone(EventTypes), EventTest) {
-			if _, err := Render(w, SampleEvent(t), nil); err != nil {
-				msgs = append(msgs, err.Error())
+			ev := Localize(SampleEvent(t), i18n.EN)
+			if _, err := Render(w, ev, nil); err != nil {
+				msgs = append(msgs, i18n.FromError(err))
 				break
 			}
 			if w.Method != http.MethodGet {
-				if _, err := renderBody(w, SampleEvent(t), zero, true); err != nil {
-					msgs = append(msgs, err.Error())
+				if _, err := renderBody(w, ev, zero, true); err != nil {
+					msgs = append(msgs, i18n.FromError(err))
 					break
 				}
 			}
 		}
 	}
 	if len(msgs) > 0 {
-		return &ValidationError{Msg: strings.Join(msgs, "; ")}
+		return &ValidationError{Msgs: msgs}
 	}
 	return nil
 }
@@ -285,12 +290,11 @@ var secretURLs = []struct{ host, pathPrefix string }{
 
 // plainSecrets erkennt typische, direkt eingetragene Geheimnisse (statt
 // ${WEBHOOK_…}), damit sie nicht in der Datenbank landen.
-func plainSecrets(w store.Webhook) []string {
-	const hint = " – bitte als ${WEBHOOK_NAME} eintragen und den Wert in deploy/.env setzen"
-	var msgs []string
+func plainSecrets(w store.Webhook) []i18n.Msg {
+	var msgs []i18n.Msg
 	for _, h := range w.Headers {
 		if secretNameRe.MatchString(h.Name) && !placeholderRe.MatchString(h.Value) && strings.TrimSpace(h.Value) != "" {
-			msgs = append(msgs, fmt.Sprintf("Header %s enthält vermutlich ein Geheimnis im Klartext%s", h.Name, hint))
+			msgs = append(msgs, i18n.M("webhook.secret_header", "name", h.Name))
 		}
 	}
 	u, err := url.Parse(w.URL)
@@ -298,12 +302,12 @@ func plainSecrets(w store.Webhook) []string {
 		return msgs
 	}
 	if u.User != nil {
-		msgs = append(msgs, "URL enthält Benutzer/Passwort"+hint)
+		msgs = append(msgs, i18n.M("webhook.secret_userinfo"))
 	}
 	for k, vals := range u.Query() {
 		for _, v := range vals {
 			if secretNameRe.MatchString(k) && v != "" && !placeholderRe.MatchString(v) {
-				msgs = append(msgs, fmt.Sprintf("URL-Parameter %s enthält vermutlich ein Geheimnis%s", k, hint))
+				msgs = append(msgs, i18n.M("webhook.secret_query", "name", k))
 			}
 		}
 	}
@@ -311,31 +315,39 @@ func plainSecrets(w store.Webhook) []string {
 	for _, s := range secretURLs {
 		if (host == s.host || strings.HasSuffix(host, "."+s.host)) && strings.HasPrefix(u.Path, s.pathPrefix) &&
 			!placeholderRe.MatchString(w.URL) {
-			msgs = append(msgs, "Diese URL enthält selbst das Geheimnis (Token im Pfad)"+hint)
+			msgs = append(msgs, i18n.M("webhook.secret_url"))
 		}
 	}
 	return msgs
 }
 
-// SampleEvent liefert ein Beispielereignis (Vorschau, Validierung, Test).
+// SampleEvent liefert ein Beispielereignis (Vorschau, Validierung, Test);
+// Titel und Text sind übersetzbar (Localize).
 func SampleEvent(eventType string) Event {
 	t := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	switch eventType {
 	case EventIPChange:
-		return Event{Type: eventType, Title: "Neue öffentliche IPv4-Adresse", Message: "203.0.113.1 → 203.0.113.2",
-			Priority: PriorityDefault, Time: t, Data: map[string]string{"family": "ipv4", "old": "203.0.113.1", "new": "203.0.113.2"}}
+		return Event{Type: eventType, Priority: PriorityDefault, Time: t,
+			TitleMsg:   i18n.M("notify.ip_change.title", "family", "IPv4"),
+			MessageMsg: i18n.M("notify.ip_change.message", "old", "203.0.113.1", "new", "203.0.113.2"),
+			Data:       map[string]string{"family": "ipv4", "old": "203.0.113.1", "new": "203.0.113.2"}}
 	case EventUpdateFailed:
-		return Event{Type: eventType, Title: "DNS-Update fehlgeschlagen: home.example.com (A)",
-			Message: "Soll-IP 203.0.113.2: Cloudflare-API: HTTP 500", Priority: PriorityHigh, Time: t,
-			Data: map[string]string{"record": "home.example.com", "type": "A", "ip": "203.0.113.2", "error": "Cloudflare-API: HTTP 500"}}
+		return Event{Type: eventType, Priority: PriorityHigh, Time: t,
+			TitleMsg: i18n.M("notify.update_failed.title", "name", "home.example.com", "type", "A"),
+			MessageMsg: i18n.M("notify.update_failed.message", "ip", "203.0.113.2",
+				"detail", i18n.Nest(i18n.M("cf.api_http", "status", "500"))),
+			Data: map[string]string{"record": "home.example.com", "type": "A", "ip": "203.0.113.2", "error": "Cloudflare API: HTTP 500"}}
 	case EventUpdateRecovered:
-		return Event{Type: eventType, Title: "DNS-Update wieder OK: home.example.com (A)",
-			Message: "home.example.com zeigt auf 203.0.113.2.", Priority: PriorityDefault, Time: t,
-			Data: map[string]string{"record": "home.example.com", "type": "A", "ip": "203.0.113.2"}}
+		return Event{Type: eventType, Priority: PriorityDefault, Time: t,
+			TitleMsg:   i18n.M("notify.update_recovered.title", "name", "home.example.com", "type", "A"),
+			MessageMsg: i18n.M("notify.update_recovered.message", "name", "home.example.com", "ip", "203.0.113.2"),
+			Data:       map[string]string{"record": "home.example.com", "type": "A", "ip": "203.0.113.2"}}
 	case EventTunnelStatus:
-		return Event{Type: eventType, Title: "Tunnel home: getrennt", Message: "Status verbunden → getrennt",
-			Priority: PriorityHigh, Time: t, Data: map[string]string{"tunnel": "home", "tunnel_id": "…", "from": "healthy", "to": "down"}}
+		return Event{Type: eventType, Priority: PriorityHigh, Time: t,
+			TitleMsg:   i18n.M("notify.tunnel.title", "name", "home", "to", i18n.Ref("tunnel.down")),
+			MessageMsg: i18n.M("notify.tunnel.message", "from", i18n.Ref("tunnel.healthy"), "to", i18n.Ref("tunnel.down")),
+			Data:       map[string]string{"tunnel": "home", "tunnel_id": "…", "from": "healthy", "to": "down"}}
 	}
-	return Event{Type: EventTest, Title: "dnsdeck: Testnachricht", Message: "Benachrichtigungen funktionieren.",
-		Priority: PriorityDefault, Time: time.Now().UTC(), Data: map[string]string{}}
+	return Event{Type: EventTest, Priority: PriorityDefault, Time: time.Now().UTC(),
+		TitleMsg: i18n.M("notify.test.title"), MessageMsg: i18n.M("notify.test.message"), Data: map[string]string{}}
 }

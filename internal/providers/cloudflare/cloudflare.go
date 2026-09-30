@@ -9,9 +9,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 )
 
@@ -61,20 +63,28 @@ type APIError struct {
 	Errors []apiError
 }
 
-func (e *APIError) Error() string {
+func (e *APIError) Error() string { return i18n.T(i18n.EN, e.LocalizedMsg()) }
+
+// LocalizedMsg liefert die Meldung übersetzbar; die Texte von Cloudflare
+// selbst (englisch) stehen im Parameter "detail".
+func (e *APIError) LocalizedMsg() i18n.Msg {
+	status := strconv.Itoa(e.Status)
 	if len(e.Errors) == 0 {
-		return fmt.Sprintf("Cloudflare-API: HTTP %d", e.Status)
+		return i18n.M("cf.api_http", "status", status)
 	}
 	msgs := make([]string, len(e.Errors))
 	for i, er := range e.Errors {
 		msgs[i] = fmt.Sprintf("%s (%d)", er.Message, er.Code)
 	}
-	return fmt.Sprintf("Cloudflare-API: HTTP %d: %s", e.Status, strings.Join(msgs, "; "))
+	return i18n.M("cf.api_error", "status", status, "detail", strings.Join(msgs, "; "))
 }
+
+// errNotConfigured: kein Token – erkennbar per errors.Is(err, providers.ErrNotConfigured).
+var errNotConfigured = &i18n.Error{Msg: i18n.M("cf.not_configured"), Wrap: providers.ErrNotConfigured}
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any) (*envelope, error) {
 	if c.token == "" {
-		return nil, fmt.Errorf("%w: CF_API_TOKEN nicht gesetzt", providers.ErrNotConfigured)
+		return nil, errNotConfigured
 	}
 	u := c.baseURL + path
 	if len(query) > 0 {
@@ -100,7 +110,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Cloudflare nicht erreichbar: %w", err)
+		return nil, i18n.Wrap(err, "cf.unreachable")
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -178,8 +188,8 @@ func (c *Client) GetRecord(ctx context.Context, zone, name, recordType string) (
 	default:
 		// Mehrere A-/AAAA-Einträge gleichen Namens (Round-Robin) – nicht
 		// raten, welcher gemeint ist.
-		return providers.Record{}, fmt.Errorf("%d %s-Einträge für %s vorhanden – bitte bei Cloudflare auf einen reduzieren",
-			len(recs), recordType, name)
+		return providers.Record{}, i18n.E("cf.multiple_records",
+			"count", strconv.Itoa(len(recs)), "type", recordType, "name", name)
 	}
 }
 
