@@ -1,6 +1,8 @@
 import { AlertTriangle, Cloud, CloudOff, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 
+import { PropagationBadge } from '@/components/Propagation'
 import { RecordDialog } from '@/components/RecordDialog'
 import { UpdateLogList } from '@/components/UpdateLogList'
 import {
@@ -21,7 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ApiError, type DnsRecord } from '@/lib/api'
 import { absoluteTime, relativeTime, useNow } from '@/lib/format'
 import { useDeleteRecord, useRecords, useRefreshIP, useSyncRecord, useZones } from '@/lib/queries'
-import { formatTTL, recordStatus } from '@/lib/records'
+import { formatTTL, recordStatusVariant } from '@/lib/records'
 import { cn } from '@/lib/utils'
 
 interface RowProps {
@@ -32,24 +34,31 @@ interface RowProps {
 }
 
 function RecordActions({ record, onEdit, onDelete }: Omit<RowProps, 'now'>) {
+  const { t } = useTranslation()
   const sync = useSyncRecord()
-  const label = `${record.name} ${record.type}`
+  const name = `${record.name} ${record.type}`
   return (
     <div className="flex justify-end gap-1">
       <Button
         variant="ghost"
         size="icon"
-        aria-label={`${label} jetzt abgleichen`}
-        title="Jetzt abgleichen"
+        aria-label={t('records.syncLabel', { name })}
+        title={t('records.sync')}
         onClick={() => sync.mutate(record.id)}
         disabled={sync.isPending}
       >
         <RefreshCw className={cn(sync.isPending && 'animate-spin')} />
       </Button>
-      <Button variant="ghost" size="icon" aria-label={`${label} bearbeiten`} title="Bearbeiten" onClick={onEdit}>
+      <Button variant="ghost" size="icon" aria-label={t('records.editLabel', { name })} title={t('common.edit')} onClick={onEdit}>
         <Pencil />
       </Button>
-      <Button variant="ghost" size="icon" aria-label={`${label} entfernen`} title="Entfernen" onClick={onDelete}>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={t('records.removeLabel', { name })}
+        title={t('common.remove')}
+        onClick={onDelete}
+      >
         <Trash2 />
       </Button>
     </div>
@@ -57,13 +66,11 @@ function RecordActions({ record, onEdit, onDelete }: Omit<RowProps, 'now'>) {
 }
 
 function RecordStatus({ record }: { record: DnsRecord }) {
-  const st = recordStatus[record.status]
+  const { t } = useTranslation()
   return (
     <>
-      <Badge variant={st.variant}>{st.label}</Badge>
-      {record.settings_pending && (
-        <p className="text-warning mt-1 text-xs">Proxy/TTL-Änderung noch nicht übertragen</p>
-      )}
+      <Badge variant={recordStatusVariant[record.status]}>{t(`record.status.${record.status}`)}</Badge>
+      {record.settings_pending && <p className="text-warning mt-1 text-xs">{t('records.settingsPending')}</p>}
       {record.message && record.status !== 'ok' && (
         <p
           className={cn(
@@ -79,10 +86,11 @@ function RecordStatus({ record }: { record: DnsRecord }) {
 }
 
 function ProxyIcon({ proxied }: { proxied: boolean }) {
+  const { t } = useTranslation()
   return proxied ? (
-    <Cloud className="size-4 text-orange-400" aria-label="Proxied" />
+    <Cloud className="size-4 text-orange-500 dark:text-orange-400" aria-label={t('records.proxied')} />
   ) : (
-    <CloudOff className="text-muted-foreground size-4" aria-label="Nur DNS" />
+    <CloudOff className="text-muted-foreground size-4" aria-label={t('records.dnsOnly')} />
   )
 }
 
@@ -104,6 +112,9 @@ function RecordRow({ record, now, onEdit, onDelete }: RowProps) {
       <TableCell className="max-w-[18rem]">
         <RecordStatus record={record} />
       </TableCell>
+      <TableCell>
+        <PropagationBadge record={record} />
+      </TableCell>
       <TableCell className="text-muted-foreground hidden text-xs whitespace-nowrap lg:table-cell">
         {record.last_checked_at ? (
           <span title={absoluteTime(record.last_checked_at)}>{relativeTime(record.last_checked_at, now)}</span>
@@ -120,8 +131,12 @@ function RecordRow({ record, now, onEdit, onDelete }: RowProps) {
 
 /** Mobile Darstellung: eine Karte je Record statt Tabellenzeile. */
 function RecordCard({ record, now, onEdit, onDelete }: RowProps) {
+  const { t } = useTranslation()
   return (
-    <li className={cn('flex flex-col gap-2 p-4', !record.enabled && 'opacity-60')} data-record={`${record.name} ${record.type}`}>
+    <li
+      className={cn('flex flex-col gap-2 p-4', !record.enabled && 'opacity-60')}
+      data-record={`${record.name} ${record.type}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -131,7 +146,9 @@ function RecordCard({ record, now, onEdit, onDelete }: RowProps) {
           <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
             <ProxyIcon proxied={record.proxied} />
             TTL {formatTTL(record.ttl)}
-            {record.last_checked_at && <span>· geprüft {relativeTime(record.last_checked_at, now)}</span>}
+            {record.last_checked_at && (
+              <span>· {t('records.checkedAgo', { time: relativeTime(record.last_checked_at, now) })}</span>
+            )}
           </div>
         </div>
         <RecordActions record={record} onEdit={onEdit} onDelete={onDelete} />
@@ -141,12 +158,14 @@ function RecordCard({ record, now, onEdit, onDelete }: RowProps) {
         <div>
           <RecordStatus record={record} />
         </div>
+        <PropagationBadge record={record} />
       </div>
     </li>
   )
 }
 
 export function Records() {
+  const { t } = useTranslation()
   const records = useRecords()
   const zones = useZones()
   const refresh = useRefreshIP()
@@ -157,22 +176,23 @@ export function Records() {
   const [toDelete, setToDelete] = useState<DnsRecord>()
 
   const notConfigured = zones.error instanceof ApiError && zones.error.status === 503
+  const code = <code className="font-mono" />
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Records</h1>
-          <p className="text-muted-foreground text-sm">DNS-Einträge, die auf die öffentliche IP zeigen sollen</p>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('nav.records')}</h1>
+          <p className="text-muted-foreground text-sm">{t('records.subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => refresh.mutate()} disabled={refresh.isPending}>
             <RefreshCw className={cn(refresh.isPending && 'animate-spin')} />
-            Jetzt aktualisieren
+            {t('common.refreshNow')}
           </Button>
           <Button onClick={() => setDialog({ open: true })}>
             <Plus />
-            Hinzufügen
+            {t('common.add')}
           </Button>
         </div>
       </div>
@@ -181,22 +201,21 @@ export function Records() {
         <div className="border-warning/40 bg-warning/10 flex gap-3 rounded-lg border p-4 text-sm">
           <AlertTriangle className="text-warning mt-0.5 size-4 shrink-0" />
           <div>
-            <p className="font-medium">Cloudflare ist nicht konfiguriert</p>
+            <p className="font-medium">{t('records.notConfigured')}</p>
             <p className="text-muted-foreground">
-              Setze <code className="font-mono">CF_API_TOKEN</code> in <code className="font-mono">deploy/.env</code> und
-              starte den Container neu. Benötigte Rechte: Zone → DNS → Edit, Zone → Zone → Read.
+              <Trans i18nKey="records.notConfiguredHint" components={{ code }} />
             </p>
           </div>
         </div>
       )}
       {zones.isError && !notConfigured && (
         <div className="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border p-4 text-sm">
-          Cloudflare nicht erreichbar: {zones.error.message}
+          {t('records.cfUnreachable', { error: zones.error.message })}
         </div>
       )}
       {refresh.isError && (
         <p className="text-destructive text-sm" role="alert">
-          Aktualisierung fehlgeschlagen: {refresh.error.message}
+          {t('common.refreshFailed', { error: refresh.error.message })}
         </p>
       )}
 
@@ -207,13 +226,13 @@ export function Records() {
             <Skeleton className="h-10" />
           </div>
         ) : records.isError ? (
-          <p className="text-destructive p-6 text-sm">Records konnten nicht geladen werden: {records.error.message}</p>
+          <p className="text-destructive p-6 text-sm">{t('records.loadError', { error: records.error.message })}</p>
         ) : records.data.length === 0 ? (
           <div className="flex flex-col items-center gap-3 p-10 text-center">
-            <p className="text-muted-foreground text-sm">Noch keine Records verwaltet.</p>
+            <p className="text-muted-foreground text-sm">{t('records.empty')}</p>
             <Button variant="outline" onClick={() => setDialog({ open: true })}>
               <Plus />
-              Ersten Record hinzufügen
+              {t('records.addFirst')}
             </Button>
           </div>
         ) : (
@@ -222,15 +241,16 @@ export function Records() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead>Name</TableHead>
-                    <TableHead>Typ</TableHead>
-                    <TableHead>IP bei Cloudflare</TableHead>
-                    <TableHead>Proxy</TableHead>
+                    <TableHead>{t('records.col.name')}</TableHead>
+                    <TableHead>{t('records.col.type')}</TableHead>
+                    <TableHead>{t('records.col.ip')}</TableHead>
+                    <TableHead>{t('records.col.proxy')}</TableHead>
                     <TableHead>TTL</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="hidden lg:table-cell">Geprüft</TableHead>
+                    <TableHead>{t('records.col.status')}</TableHead>
+                    <TableHead>{t('records.col.propagation')}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{t('records.col.checked')}</TableHead>
                     <TableHead className="text-right">
-                      <span className="sr-only">Aktionen</span>
+                      <span className="sr-only">{t('records.col.actions')}</span>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -264,8 +284,8 @@ export function Records() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Update-Protokoll</CardTitle>
-          <CardDescription>Angelegte und geänderte Einträge sowie Fehler</CardDescription>
+          <CardTitle className="text-lg">{t('records.logTitle')}</CardTitle>
+          <CardDescription>{t('records.logHint')}</CardDescription>
         </CardHeader>
         <CardContent>
           <UpdateLogList limit={20} />
@@ -281,18 +301,18 @@ export function Records() {
       <AlertDialog open={toDelete !== undefined} onOpenChange={(open) => !open && setToDelete(undefined)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Record nicht mehr verwalten?</AlertDialogTitle>
+            <AlertDialogTitle>{t('records.removeTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="text-foreground font-mono">
-                {toDelete?.name} ({toDelete?.type})
-              </span>{' '}
-              wird aus dnsdeck entfernt und nicht mehr aktualisiert. Der Eintrag bei Cloudflare bleibt unverändert
-              bestehen.
+              <Trans
+                i18nKey="records.removeHint"
+                values={{ name: `${toDelete?.name} (${toDelete?.type})` }}
+                components={{ name: <span className="text-foreground font-mono" /> }}
+              />
             </AlertDialogDescription>
           </AlertDialogHeader>
           {del.isError && <p className="text-destructive text-sm">{del.error.message}</p>}
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault()
@@ -300,7 +320,7 @@ export function Records() {
               }}
               disabled={del.isPending}
             >
-              Entfernen
+              {t('common.remove')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

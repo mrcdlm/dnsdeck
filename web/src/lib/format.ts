@@ -1,7 +1,24 @@
 import { useEffect, useState } from 'react'
 
-const rtf = new Intl.RelativeTimeFormat('de', { numeric: 'auto' })
-const dtf = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
+import i18n, { currentLang } from '@/i18n'
+
+const locales = { de: 'de-DE', en: 'en-US' } as const
+
+// Formatierer je Sprache zwischenspeichern
+const cache = new Map<string, { rtf: Intl.RelativeTimeFormat; dtf: Intl.DateTimeFormat; nf: Intl.NumberFormat }>()
+function fmt() {
+  const lang = currentLang()
+  let f = cache.get(lang)
+  if (!f) {
+    f = {
+      rtf: new Intl.RelativeTimeFormat(lang, { numeric: 'auto' }),
+      dtf: new Intl.DateTimeFormat(locales[lang], { dateStyle: 'medium', timeStyle: 'short' }),
+      nf: new Intl.NumberFormat(locales[lang], { maximumFractionDigits: 2 }),
+    }
+    cache.set(lang, f)
+  }
+  return f
+}
 
 const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['year', 365 * 24 * 3600],
@@ -15,15 +32,19 @@ const units: [Intl.RelativeTimeFormatUnit, number][] = [
 export function relativeTime(iso: string, now: number): string {
   const diff = (new Date(iso).getTime() - now) / 1000
   const abs = Math.abs(diff)
-  if (abs < 45) return 'gerade eben'
+  if (abs < 45) return i18n.t('time.justNow')
   for (const [unit, secs] of units) {
-    if (abs >= secs) return rtf.format(Math.round(diff / secs), unit)
+    if (abs >= secs) return fmt().rtf.format(Math.round(diff / secs), unit)
   }
-  return rtf.format(Math.round(diff / 60), 'minute')
+  return fmt().rtf.format(Math.round(diff / 60), 'minute')
 }
 
 export function absoluteTime(iso: string): string {
-  return dtf.format(new Date(iso))
+  return fmt().dtf.format(new Date(iso))
+}
+
+export function formatNumber(n: number): string {
+  return fmt().nf.format(n)
 }
 
 /** Liefert die aktuelle Zeit und aktualisiert sie regelmäßig (für relative Angaben). */

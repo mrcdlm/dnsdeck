@@ -1,14 +1,17 @@
 import { Loader2, LogIn } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Navigate, useNavigate } from 'react-router'
 
 import { Logo } from '@/components/Logo'
+import { Preferences } from '@/components/Preferences'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useLogin, useSession } from '@/lib/queries'
 
 export function Login() {
+  const { t } = useTranslation()
   const session = useSession()
   const login = useLogin()
   const navigate = useNavigate()
@@ -27,13 +30,14 @@ export function Login() {
   }
 
   return (
-    <div className="grid min-h-svh place-items-center px-4">
+    <div className="relative grid min-h-svh place-items-center px-4">
+      <Preferences className="absolute top-4 right-4" />
       <div className="w-full max-w-sm">
         <Logo className="mb-6 justify-center text-lg" />
         <Card>
           <CardHeader>
-            <CardTitle>Anmelden</CardTitle>
-            <CardDescription>Bitte das Dashboard-Passwort eingeben.</CardDescription>
+            <CardTitle>{t('auth.title')}</CardTitle>
+            <CardDescription>{t('auth.description')}</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={submit} className="flex flex-col gap-4">
@@ -41,7 +45,8 @@ export function Login() {
                 type="password"
                 name="password"
                 autoComplete="current-password"
-                placeholder="Passwort"
+                placeholder={t('auth.password')}
+                aria-label={t('auth.password')}
                 autoFocus
                 required
                 value={password}
@@ -55,7 +60,7 @@ export function Login() {
               )}
               <Button type="submit" disabled={login.isPending || password === ''}>
                 {login.isPending ? <Loader2 className="animate-spin" /> : <LogIn />}
-                Anmelden
+                {t('auth.submit')}
               </Button>
             </form>
           </CardContent>

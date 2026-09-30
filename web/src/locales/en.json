@@ -1,0 +1,361 @@
+{
+  "common": {
+    "add": "Add",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "remove": "Remove",
+    "save": "Save",
+    "refreshNow": "Update now",
+    "refreshFailed": "Update failed: {{error}}"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "records": "Records",
+    "tunnels": "Tunnels",
+    "history": "History",
+    "settings": "Settings"
+  },
+  "live": {
+    "on": "Live",
+    "off": "Offline – refreshing every 30 s",
+    "onHint": "Changes appear instantly",
+    "offHint": "No live connection – data is reloaded every 30 s"
+  },
+  "prefs": {
+    "language": "Language",
+    "languageName": {
+      "de": "Deutsch",
+      "en": "English"
+    },
+    "theme": "Appearance: {{mode}}",
+    "themeNext": "click for {{mode}}",
+    "themeMode": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    }
+  },
+  "auth": {
+    "title": "Sign in",
+    "description": "Please enter the dashboard password.",
+    "password": "Password",
+    "submit": "Sign in",
+    "logout": "Sign out"
+  },
+  "time": {
+    "justNow": "just now"
+  },
+  "ttl": {
+    "auto": "Auto",
+    "seconds_one": "{{count}} second",
+    "seconds_other": "{{count}} seconds",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days"
+  },
+  "interval": {
+    "seconds_one": "{{count}} second",
+    "seconds_other": "{{count}} seconds",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours"
+  },
+  "ip": {
+    "title": "Public IP",
+    "copy": "Copy {{family}} address",
+    "since": "since {{date}} ({{relative}})",
+    "agreement_one": "{{votes}} of {{count}} source agree",
+    "agreement_other": "{{votes}} of {{count}} sources agree",
+    "sourcesFailed_one": "{{count}} source unreachable",
+    "sourcesFailed_other": "{{count}} sources unreachable",
+    "lastChecked": "Last checked {{time}}",
+    "notChecked": "Not checked yet",
+    "refreshHint": "Check IP and sync all records",
+    "loadError": "Could not load IP status: {{error}}",
+    "status": {
+      "ok": "Confirmed",
+      "unconfirmed": "Unconfirmed",
+      "unavailable": "Unavailable",
+      "pending": "Pending"
+    }
+  },
+  "dashboard": {
+    "subtitle": "Public addresses, DNS records and recent changes",
+    "ipChanges": "Recent IP changes",
+    "ipChangesHint": "The ten most recent changes of the public addresses",
+    "ipChangesEmpty": "No IP changes recorded yet.",
+    "records": "DNS records",
+    "noRecords": "No records yet",
+    "managed": "{{count}} managed",
+    "upToDate": "{{count}} up to date",
+    "errors_one": "{{count}} error",
+    "errors_other": "{{count}} errors",
+    "other": "{{count}} other",
+    "tunnels": "Cloudflare Tunnels",
+    "notConfigured": "Not configured",
+    "noTunnels": "No tunnels",
+    "monitored": "{{count}} monitored",
+    "connected": "{{count}} connected",
+    "degraded": "{{count}} degraded",
+    "down": "{{count}} disconnected/inactive",
+    "dnsUpdates": "Recent DNS updates",
+    "dnsUpdatesHint": "Changes to the managed records"
+  },
+  "record": {
+    "status": {
+      "ok": "Up to date",
+      "error": "Error",
+      "pending": "Pending",
+      "skipped": "Skipped",
+      "paused": "Paused"
+    }
+  },
+  "update": {
+    "result": {
+      "created": "Created",
+      "adopted": "Adopted",
+      "updated": "Updated",
+      "recovered": "Recovered",
+      "error": "Error"
+    },
+    "trigger": {
+      "scheduled": "scheduled",
+      "manual": "manual",
+      "record_saved": "after saving"
+    }
+  },
+  "updates": {
+    "empty": "No DNS updates yet.",
+    "loadError": "Could not load update log: {{error}}"
+  },
+  "records": {
+    "subtitle": "DNS records that should point to the public IP",
+    "sync": "Sync now",
+    "syncLabel": "Sync {{name}} now",
+    "editLabel": "Edit {{name}}",
+    "removeLabel": "Remove {{name}}",
+    "settingsPending": "Proxy/TTL change not yet applied",
+    "proxied": "Proxied",
+    "dnsOnly": "DNS only",
+    "checkedAgo": "checked {{time}}",
+    "notConfigured": "Cloudflare is not configured",
+    "notConfiguredHint": "Set <code>CF_API_TOKEN</code> in <code>deploy/.env</code> and restart the container. Required permissions: Zone → DNS → Edit, Zone → Zone → Read.",
+    "cfUnreachable": "Cloudflare unreachable: {{error}}",
+    "loadError": "Could not load records: {{error}}",
+    "empty": "No records managed yet.",
+    "addFirst": "Add first record",
+    "col": {
+      "name": "Name",
+      "type": "Type",
+      "ip": "IP at Cloudflare",
+      "proxy": "Proxy",
+      "status": "Status",
+      "propagation": "Propagation",
+      "checked": "Checked",
+      "actions": "Actions"
+    },
+    "logTitle": "Update log",
+    "logHint": "Created and changed records as well as errors",
+    "removeTitle": "Stop managing record?",
+    "removeHint": "<name>{{name}}</name> will be removed from dnsdeck and no longer updated. The record at Cloudflare stays unchanged."
+  },
+  "recordDialog": {
+    "addTitle": "Add record",
+    "editTitle": "Edit record",
+    "addHint": "If the record does not exist at Cloudflare, it is created with these values. If it already exists, dnsdeck adopts proxy and TTL from Cloudflare and only changes the IP.",
+    "editHint": "Changed proxy/TTL values are applied to Cloudflare immediately.",
+    "zonesError": "Could not load zones: {{error}}",
+    "zone": "Zone",
+    "zonesLoading": "Loading zones …",
+    "zonePick": "Select zone",
+    "name": "Name",
+    "namePlaceholder": "e.g. home (empty = zone apex)",
+    "fqdn": "Full name:",
+    "type": "Type",
+    "proxied": "Proxy through Cloudflare",
+    "proxiedHint": "Orange cloud: traffic goes through Cloudflare, the TTL is then automatic.",
+    "enabled": "Update automatically",
+    "enabledHint": "Disabled: the record stays managed but is not changed."
+  },
+  "tunnel": {
+    "status": {
+      "healthy": "Connected",
+      "degraded": "Degraded",
+      "down": "Disconnected",
+      "inactive": "Inactive"
+    },
+    "hint": {
+      "healthy": "healthy – all connections active",
+      "degraded": "degraded – not all connections active",
+      "down": "down – no active connection",
+      "inactive": "inactive – never connected"
+    },
+    "bucket": {
+      "healthy": "connected",
+      "degraded": "degraded",
+      "down": "disconnected",
+      "inactive": "inactive",
+      "none": "no data"
+    }
+  },
+  "tunnels": {
+    "subtitle": "Cloudflare Tunnels of your account",
+    "polled": "polled {{time}}",
+    "period": "Period",
+    "range": {
+      "24h": "24 hours",
+      "7d": "7 days"
+    },
+    "pollNow": "Poll now",
+    "notConfigured": "Tunnel monitoring is not configured",
+    "notConfiguredHint": "Set <code>CF_API_TOKEN</code> and <code>CF_ACCOUNT_ID</code> in <code>deploy/.env</code> and restart the container. The token additionally needs the permission Account → Cloudflare Tunnel → Read.",
+    "lastPollFailed": "Last poll failed: {{error}}",
+    "lastPollFailedShort": "Last poll failed",
+    "showingLast": "– showing the last known state.",
+    "loadError": "Could not load tunnels: {{error}}",
+    "empty": "No tunnels found in the account.",
+    "firstPoll": "First poll running …",
+    "connections_one": "{{count}} connection",
+    "connections_other": "{{count}} connections",
+    "colo": "Cloudflare data center",
+    "statusSince": "Status since (observed)",
+    "connectedSince": "Connected since",
+    "disconnectedSince": "Disconnected since",
+    "id": "Tunnel ID",
+    "uptime": "Uptime {{range}}",
+    "observedSince": "Observed since {{time}} – no data before",
+    "gaps": "Gaps in the period (grey): dnsdeck or Cloudflare were unreachable"
+  },
+  "history": {
+    "subtitle": "DNS updates, IP changes and tunnel status changes",
+    "tab": {
+      "updates": "DNS updates",
+      "ip": "IP changes",
+      "tunnels": "Tunnel status"
+    },
+    "loadError": "Could not load history: {{error}}",
+    "loadOlder": "Load older",
+    "filter": {
+      "record": "Record",
+      "allRecords": "All records",
+      "result": "Result",
+      "allResults": "All results",
+      "family": "Address family",
+      "bothFamilies": "IPv4 and IPv6",
+      "onlyV4": "IPv4 only",
+      "onlyV6": "IPv6 only",
+      "tunnel": "Tunnel",
+      "allTunnels": "All tunnels"
+    },
+    "emptyFiltered": "No entries for this selection.",
+    "firstDetected": "first detected",
+    "firstObserved": "first observed",
+    "tunnelsEmpty": "No status changes observed yet."
+  },
+  "settings": {
+    "subtitle": "Intervals, IP sources and webhooks",
+    "loadError": "Could not load settings: {{error}}",
+    "intervals": "Intervals",
+    "intervalsHint": "Changes take effect immediately, no restart needed.",
+    "ipInterval": "Check IP and sync DNS",
+    "ipIntervalHint": "The maximum time a record points to the old IP after an IP change.",
+    "tunnelInterval": "Poll tunnels",
+    "tunnelIntervalHint": "Determines how quickly a tunnel outage is detected.",
+    "sources": "IP sources",
+    "sourcesHint": "The public IP is only accepted when the majority of sources agree. Enable at least {{min}}, recommended: all.",
+    "sourcesMin": "Enable at least {{min}} sources.",
+    "moveUp": "Move {{name}} up",
+    "moveDown": "Move {{name}} down",
+    "notifications": "Notifications",
+    "notificationsHint": "Applies to all webhooks.",
+    "notifyLanguage": "Notification language",
+    "notifyLanguageHint": "Title and text of messages sent to webhooks. Independent of the interface language.",
+    "saved": "Saved",
+    "discard": "Discard"
+  },
+  "events": {
+    "ip_change": {
+      "label": "IP change",
+      "hint": "The public IPv4 or IPv6 address has changed."
+    },
+    "update_failed": {
+      "label": "DNS update failed",
+      "hint": "Once per new error, not on every retry."
+    },
+    "update_recovered": {
+      "label": "DNS update OK again",
+      "hint": "A previously failing record is up to date again."
+    },
+    "tunnel_status": {
+      "label": "Tunnel status change",
+      "hint": "e.g. connected → disconnected."
+    }
+  },
+  "webhooks": {
+    "title": "Notifications (webhooks)",
+    "subtitle": "Notify any service via HTTP request – presets for ntfy, Gotify, Discord, Slack, Telegram and Home Assistant.",
+    "loadError": "Could not load webhooks: {{error}}",
+    "empty": "No webhooks yet.",
+    "add": "Add webhook",
+    "addTitle": "Add webhook",
+    "editTitle": "Edit webhook",
+    "activeLabel": "{{name}} active",
+    "editLabel": "Edit {{name}}",
+    "deleteLabel": "Delete {{name}}",
+    "inactive": "inactive",
+    "test": "Test",
+    "testDelivered": "Test message delivered",
+    "noEvents": "No event selected – sends test messages only",
+    "missingEnv": "Not set: <code>{{names}}</code> – add to deploy/.env and restart the container.",
+    "saveFailed": "Saving failed: {{error}}",
+    "lastFailed": "Last delivery failed: {{error}}",
+    "lastSent": "Last delivered {{time}}",
+    "nothingSent": "Nothing sent yet",
+    "deleteTitle": "Delete webhook?",
+    "deleteHint": "“{{name}}” will be deleted and receive no more notifications. The environment variables in deploy/.env stay unchanged.",
+    "secretsHint": "Never enter secrets directly: use <code>{{urlVar}}</code> in URL and headers, <code>{{bodyVar}}</code> in the body. The values belong in <code>deploy/.env</code>.",
+    "preset": "Preset",
+    "presetGeneric": "Generic (JSON)",
+    "name": "Name",
+    "envIntro": "Add to deploy/.env, then restart the container:",
+    "env": {
+      "WEBHOOK_NTFY_TOPIC": "topic name (treat like a password)",
+      "WEBHOOK_GOTIFY_TOKEN": "app token from Gotify",
+      "WEBHOOK_DISCORD_URL": "full webhook URL from the channel settings",
+      "WEBHOOK_SLACK_URL": "incoming webhook URL",
+      "WEBHOOK_TELEGRAM_TOKEN": "bot token from @BotFather",
+      "WEBHOOK_TELEGRAM_CHAT_ID": "chat ID of the recipient",
+      "WEBHOOK_HA_ID": "webhook ID of the automation"
+    },
+    "method": "Method",
+    "noHeaders": "No additional headers.",
+    "headerName": "Header {{n}} name",
+    "headerValue": "Header {{n}} value",
+    "headerValuePlaceholder": "Value, e.g. {{example}}",
+    "headerRemove": "Remove header {{n}}",
+    "body": "Body template",
+    "bodyPlaceholder": "Empty = default JSON with type, title, message, priority, time, data",
+    "bodyHelp": "Available: <code>{{fields}}</code> · Functions: <code>json</code> (for JSON values), <code>env</code>, <code>{{funcs}}</code>",
+    "sendOn": "Send on",
+    "active": "Active",
+    "preview": "Preview",
+    "sampleEvent": "Sample event",
+    "sample": "Sample: {{event}}",
+    "previewHint": "Placeholders stay visible in the preview – values are never shown."
+  },
+  "system": {
+    "title": "System",
+    "hint": "Credentials are never shown, only whether they are set.",
+    "version": "Version",
+    "cfToken": "Cloudflare token",
+    "cfAccount": "Cloudflare account ID",
+    "dataDir": "Data directory",
+    "set": "set",
+    "missing": "missing"
+  }
+}

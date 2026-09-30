@@ -1,19 +1,19 @@
+import type de from '@/locales/de.json'
+
 import type { NotifyEventType, Webhook, WebhookInput } from './api'
 
-export const eventInfo: Record<NotifyEventType, { label: string; hint: string }> = {
-  ip_change: { label: 'IP-Wechsel', hint: 'Die öffentliche IPv4 oder IPv6 hat sich geändert.' },
-  update_failed: { label: 'DNS-Update fehlgeschlagen', hint: 'Einmal je neuem Fehler, nicht bei jeder Wiederholung.' },
-  update_recovered: { label: 'DNS-Update wieder OK', hint: 'Ein zuvor fehlerhafter Record ist wieder aktuell.' },
-  tunnel_status: { label: 'Tunnel-Statuswechsel', hint: 'z. B. verbunden → getrennt.' },
-}
+/** Env-Variablen der Vorlagen – jede hat eine Erklärung unter webhooks.env.<name> */
+export type PresetEnv = keyof (typeof de)['webhooks']['env']
 
-export const eventTypes = Object.keys(eventInfo) as NotifyEventType[]
+// Beschriftungen: events.<typ>.label / .hint (locales)
+export const eventTypes: NotifyEventType[] = ['ip_change', 'update_failed', 'update_recovered', 'tunnel_status']
 
 export interface Preset {
   id: string
+  /** Anzeigename; Produktnamen werden nicht übersetzt ("generic" über locales) */
   label: string
-  /** Kurze Erklärung, welche Env-Variablen gesetzt werden müssen */
-  env: { name: string; hint: string }[]
+  /** Env-Variablen, die gesetzt werden müssen; Erklärung: webhooks.env.<name> */
+  env: PresetEnv[]
   webhook: Omit<WebhookInput, 'name' | 'enabled' | 'events'>
 }
 
@@ -27,14 +27,14 @@ const json = 'application/json'
 export const presets: Preset[] = [
   {
     id: 'generic',
-    label: 'Allgemein (JSON)',
+    label: '',
     env: [],
     webhook: { method: 'POST', url: 'https://example.com/hook', headers: [], content_type: json, body_template: '' },
   },
   {
     id: 'ntfy',
     label: 'ntfy',
-    env: [{ name: 'WEBHOOK_NTFY_TOPIC', hint: 'Topic-Name (wie ein Passwort behandeln)' }],
+    env: ['WEBHOOK_NTFY_TOPIC'],
     webhook: {
       method: 'POST',
       url: 'https://ntfy.sh',
@@ -51,7 +51,7 @@ export const presets: Preset[] = [
   {
     id: 'gotify',
     label: 'Gotify',
-    env: [{ name: 'WEBHOOK_GOTIFY_TOKEN', hint: 'App-Token aus Gotify' }],
+    env: ['WEBHOOK_GOTIFY_TOKEN'],
     webhook: {
       method: 'POST',
       url: 'https://gotify.example.com/message',
@@ -68,7 +68,7 @@ export const presets: Preset[] = [
   {
     id: 'discord',
     label: 'Discord',
-    env: [{ name: 'WEBHOOK_DISCORD_URL', hint: 'komplette Webhook-URL aus den Kanaleinstellungen' }],
+    env: ['WEBHOOK_DISCORD_URL'],
     webhook: {
       method: 'POST',
       url: '${WEBHOOK_DISCORD_URL}',
@@ -80,7 +80,7 @@ export const presets: Preset[] = [
   {
     id: 'slack',
     label: 'Slack',
-    env: [{ name: 'WEBHOOK_SLACK_URL', hint: 'Incoming-Webhook-URL' }],
+    env: ['WEBHOOK_SLACK_URL'],
     webhook: {
       method: 'POST',
       url: '${WEBHOOK_SLACK_URL}',
@@ -92,10 +92,7 @@ export const presets: Preset[] = [
   {
     id: 'telegram',
     label: 'Telegram',
-    env: [
-      { name: 'WEBHOOK_TELEGRAM_TOKEN', hint: 'Bot-Token von @BotFather' },
-      { name: 'WEBHOOK_TELEGRAM_CHAT_ID', hint: 'Chat-ID des Empfängers' },
-    ],
+    env: ['WEBHOOK_TELEGRAM_TOKEN', 'WEBHOOK_TELEGRAM_CHAT_ID'],
     webhook: {
       method: 'POST',
       url: 'https://api.telegram.org/bot${WEBHOOK_TELEGRAM_TOKEN}/sendMessage',
@@ -110,7 +107,7 @@ export const presets: Preset[] = [
   {
     id: 'homeassistant',
     label: 'Home Assistant',
-    env: [{ name: 'WEBHOOK_HA_ID', hint: 'Webhook-ID der Automation' }],
+    env: ['WEBHOOK_HA_ID'],
     webhook: {
       method: 'POST',
       url: 'http://homeassistant.local:8123/api/webhook/${WEBHOOK_HA_ID}',

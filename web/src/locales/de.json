@@ -1,0 +1,361 @@
+{
+  "common": {
+    "add": "Hinzufügen",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "remove": "Entfernen",
+    "save": "Speichern",
+    "refreshNow": "Jetzt aktualisieren",
+    "refreshFailed": "Aktualisierung fehlgeschlagen: {{error}}"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "records": "Records",
+    "tunnels": "Tunnels",
+    "history": "Verlauf",
+    "settings": "Einstellungen"
+  },
+  "live": {
+    "on": "Live",
+    "off": "Offline – lädt alle 30 s",
+    "onHint": "Änderungen erscheinen sofort",
+    "offHint": "Keine Live-Verbindung – Daten werden alle 30 s nachgeladen"
+  },
+  "prefs": {
+    "language": "Sprache",
+    "languageName": {
+      "de": "Deutsch",
+      "en": "English"
+    },
+    "theme": "Darstellung: {{mode}}",
+    "themeNext": "klicken für {{mode}}",
+    "themeMode": {
+      "system": "System",
+      "light": "Hell",
+      "dark": "Dunkel"
+    }
+  },
+  "auth": {
+    "title": "Anmelden",
+    "description": "Bitte das Dashboard-Passwort eingeben.",
+    "password": "Passwort",
+    "submit": "Anmelden",
+    "logout": "Abmelden"
+  },
+  "time": {
+    "justNow": "gerade eben"
+  },
+  "ttl": {
+    "auto": "Automatisch",
+    "seconds_one": "{{count}} Sekunde",
+    "seconds_other": "{{count}} Sekunden",
+    "minutes_one": "{{count}} Minute",
+    "minutes_other": "{{count}} Minuten",
+    "hours_one": "{{count}} Stunde",
+    "hours_other": "{{count}} Stunden",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage"
+  },
+  "interval": {
+    "seconds_one": "{{count}} Sekunde",
+    "seconds_other": "{{count}} Sekunden",
+    "minutes_one": "{{count}} Minute",
+    "minutes_other": "{{count}} Minuten",
+    "hours_one": "{{count}} Stunde",
+    "hours_other": "{{count}} Stunden"
+  },
+  "ip": {
+    "title": "Öffentliche IP",
+    "copy": "{{family}}-Adresse kopieren",
+    "since": "seit {{date}} ({{relative}})",
+    "agreement_one": "{{votes}} von {{count}} Quelle einig",
+    "agreement_other": "{{votes}} von {{count}} Quellen einig",
+    "sourcesFailed_one": "{{count}} Quelle nicht erreichbar",
+    "sourcesFailed_other": "{{count}} Quellen nicht erreichbar",
+    "lastChecked": "Zuletzt geprüft {{time}}",
+    "notChecked": "Noch nicht geprüft",
+    "refreshHint": "IP prüfen und alle Records abgleichen",
+    "loadError": "IP-Status konnte nicht geladen werden: {{error}}",
+    "status": {
+      "ok": "Bestätigt",
+      "unconfirmed": "Unbestätigt",
+      "unavailable": "Nicht verfügbar",
+      "pending": "Ausstehend"
+    }
+  },
+  "dashboard": {
+    "subtitle": "Öffentliche Adressen, DNS-Records und letzte Änderungen",
+    "ipChanges": "Letzte IP-Wechsel",
+    "ipChangesHint": "Die zehn jüngsten Änderungen der öffentlichen Adressen",
+    "ipChangesEmpty": "Noch keine IP-Wechsel protokolliert.",
+    "records": "DNS-Records",
+    "noRecords": "Noch keine Records",
+    "managed": "{{count}} verwaltet",
+    "upToDate": "{{count}} aktuell",
+    "errors_one": "{{count}} Fehler",
+    "errors_other": "{{count}} Fehler",
+    "other": "{{count}} sonstige",
+    "tunnels": "Cloudflare Tunnels",
+    "notConfigured": "Nicht konfiguriert",
+    "noTunnels": "Keine Tunnels",
+    "monitored": "{{count}} überwacht",
+    "connected": "{{count}} verbunden",
+    "degraded": "{{count}} eingeschränkt",
+    "down": "{{count}} getrennt/inaktiv",
+    "dnsUpdates": "Letzte DNS-Updates",
+    "dnsUpdatesHint": "Änderungen an den verwalteten Records"
+  },
+  "record": {
+    "status": {
+      "ok": "Aktuell",
+      "error": "Fehler",
+      "pending": "Ausstehend",
+      "skipped": "Übersprungen",
+      "paused": "Pausiert"
+    }
+  },
+  "update": {
+    "result": {
+      "created": "Angelegt",
+      "adopted": "Übernommen",
+      "updated": "Aktualisiert",
+      "recovered": "Behoben",
+      "error": "Fehler"
+    },
+    "trigger": {
+      "scheduled": "automatisch",
+      "manual": "manuell",
+      "record_saved": "nach Speichern"
+    }
+  },
+  "updates": {
+    "empty": "Noch keine DNS-Updates.",
+    "loadError": "Update-Log konnte nicht geladen werden: {{error}}"
+  },
+  "records": {
+    "subtitle": "DNS-Einträge, die auf die öffentliche IP zeigen sollen",
+    "sync": "Jetzt abgleichen",
+    "syncLabel": "{{name}} jetzt abgleichen",
+    "editLabel": "{{name}} bearbeiten",
+    "removeLabel": "{{name}} entfernen",
+    "settingsPending": "Proxy/TTL-Änderung noch nicht übertragen",
+    "proxied": "Proxied",
+    "dnsOnly": "Nur DNS",
+    "checkedAgo": "geprüft {{time}}",
+    "notConfigured": "Cloudflare ist nicht konfiguriert",
+    "notConfiguredHint": "Setze <code>CF_API_TOKEN</code> in <code>deploy/.env</code> und starte den Container neu. Benötigte Rechte: Zone → DNS → Edit, Zone → Zone → Read.",
+    "cfUnreachable": "Cloudflare nicht erreichbar: {{error}}",
+    "loadError": "Records konnten nicht geladen werden: {{error}}",
+    "empty": "Noch keine Records verwaltet.",
+    "addFirst": "Ersten Record hinzufügen",
+    "col": {
+      "name": "Name",
+      "type": "Typ",
+      "ip": "IP bei Cloudflare",
+      "proxy": "Proxy",
+      "status": "Status",
+      "propagation": "Verbreitung",
+      "checked": "Geprüft",
+      "actions": "Aktionen"
+    },
+    "logTitle": "Update-Protokoll",
+    "logHint": "Angelegte und geänderte Einträge sowie Fehler",
+    "removeTitle": "Record nicht mehr verwalten?",
+    "removeHint": "<name>{{name}}</name> wird aus dnsdeck entfernt und nicht mehr aktualisiert. Der Eintrag bei Cloudflare bleibt unverändert bestehen."
+  },
+  "recordDialog": {
+    "addTitle": "Record hinzufügen",
+    "editTitle": "Record bearbeiten",
+    "addHint": "Fehlt der Eintrag bei Cloudflare, wird er mit diesen Werten angelegt. Existiert er bereits, übernimmt dnsdeck Proxy und TTL von Cloudflare und ändert nur die IP.",
+    "editHint": "Geänderte Proxy-/TTL-Werte werden sofort zu Cloudflare übertragen.",
+    "zonesError": "Zonen konnten nicht geladen werden: {{error}}",
+    "zone": "Zone",
+    "zonesLoading": "Lade Zonen …",
+    "zonePick": "Zone wählen",
+    "name": "Name",
+    "namePlaceholder": "z. B. home (leer = Zone selbst)",
+    "fqdn": "Vollständiger Name:",
+    "type": "Typ",
+    "proxied": "Über Cloudflare proxien",
+    "proxiedHint": "Orange Wolke: Verkehr läuft über Cloudflare, die TTL ist dann automatisch.",
+    "enabled": "Automatisch aktualisieren",
+    "enabledHint": "Deaktiviert: Eintrag bleibt verwaltet, wird aber nicht geändert."
+  },
+  "tunnel": {
+    "status": {
+      "healthy": "Verbunden",
+      "degraded": "Eingeschränkt",
+      "down": "Getrennt",
+      "inactive": "Inaktiv"
+    },
+    "hint": {
+      "healthy": "healthy – alle Verbindungen aktiv",
+      "degraded": "degraded – nicht alle Verbindungen aktiv",
+      "down": "down – keine aktive Verbindung",
+      "inactive": "inactive – noch nie verbunden"
+    },
+    "bucket": {
+      "healthy": "verbunden",
+      "degraded": "eingeschränkt",
+      "down": "getrennt",
+      "inactive": "inaktiv",
+      "none": "keine Daten"
+    }
+  },
+  "tunnels": {
+    "subtitle": "Cloudflare Tunnels deines Accounts",
+    "polled": "abgefragt {{time}}",
+    "period": "Zeitraum",
+    "range": {
+      "24h": "24 Stunden",
+      "7d": "7 Tage"
+    },
+    "pollNow": "Jetzt abfragen",
+    "notConfigured": "Tunnel-Monitoring ist nicht konfiguriert",
+    "notConfiguredHint": "Setze <code>CF_API_TOKEN</code> und <code>CF_ACCOUNT_ID</code> in <code>deploy/.env</code> und starte den Container neu. Das Token braucht zusätzlich das Recht Account → Cloudflare Tunnel → Read.",
+    "lastPollFailed": "Letzte Abfrage fehlgeschlagen: {{error}}",
+    "lastPollFailedShort": "Letzte Abfrage fehlgeschlagen",
+    "showingLast": "– angezeigt wird der letzte bekannte Stand.",
+    "loadError": "Tunnels konnten nicht geladen werden: {{error}}",
+    "empty": "Keine Tunnels im Account gefunden.",
+    "firstPoll": "Erste Abfrage läuft …",
+    "connections_one": "{{count}} Verbindung",
+    "connections_other": "{{count}} Verbindungen",
+    "colo": "Cloudflare-Rechenzentrum",
+    "statusSince": "Status seit (beobachtet)",
+    "connectedSince": "Verbunden seit",
+    "disconnectedSince": "Getrennt seit",
+    "id": "Tunnel-ID",
+    "uptime": "Uptime {{range}}",
+    "observedSince": "Beobachtet seit {{time}} – davor keine Daten",
+    "gaps": "Lücken im Zeitraum (grau): dnsdeck oder Cloudflare waren nicht erreichbar"
+  },
+  "history": {
+    "subtitle": "DNS-Updates, IP-Wechsel und Tunnel-Statuswechsel",
+    "tab": {
+      "updates": "DNS-Updates",
+      "ip": "IP-Wechsel",
+      "tunnels": "Tunnel-Status"
+    },
+    "loadError": "Verlauf konnte nicht geladen werden: {{error}}",
+    "loadOlder": "Ältere laden",
+    "filter": {
+      "record": "Record",
+      "allRecords": "Alle Records",
+      "result": "Ergebnis",
+      "allResults": "Alle Ergebnisse",
+      "family": "Adressfamilie",
+      "bothFamilies": "IPv4 und IPv6",
+      "onlyV4": "Nur IPv4",
+      "onlyV6": "Nur IPv6",
+      "tunnel": "Tunnel",
+      "allTunnels": "Alle Tunnels"
+    },
+    "emptyFiltered": "Keine Einträge für diese Auswahl.",
+    "firstDetected": "erstmals erkannt",
+    "firstObserved": "erstmals beobachtet",
+    "tunnelsEmpty": "Noch keine Statuswechsel beobachtet."
+  },
+  "settings": {
+    "subtitle": "Intervalle, IP-Quellen und Webhooks",
+    "loadError": "Einstellungen konnten nicht geladen werden: {{error}}",
+    "intervals": "Intervalle",
+    "intervalsHint": "Änderungen gelten sofort, ohne Neustart.",
+    "ipInterval": "IP prüfen und DNS abgleichen",
+    "ipIntervalHint": "So lange zeigt ein Record nach einem IP-Wechsel höchstens auf die alte IP.",
+    "tunnelInterval": "Tunnels abfragen",
+    "tunnelIntervalHint": "Bestimmt, wie schnell ein Tunnel-Ausfall erkannt wird.",
+    "sources": "IP-Quellen",
+    "sourcesHint": "Die öffentliche IP gilt erst, wenn die Mehrheit der Quellen übereinstimmt. Mindestens {{min}} aktivieren, empfohlen: alle.",
+    "sourcesMin": "Mindestens {{min}} Quellen aktivieren.",
+    "moveUp": "{{name}} nach oben",
+    "moveDown": "{{name}} nach unten",
+    "notifications": "Benachrichtigungen",
+    "notificationsHint": "Gilt für alle Webhooks.",
+    "notifyLanguage": "Sprache der Benachrichtigungen",
+    "notifyLanguageHint": "Titel und Text der Nachrichten an Webhooks. Unabhängig von der Sprache der Oberfläche.",
+    "saved": "Gespeichert",
+    "discard": "Verwerfen"
+  },
+  "events": {
+    "ip_change": {
+      "label": "IP-Wechsel",
+      "hint": "Die öffentliche IPv4 oder IPv6 hat sich geändert."
+    },
+    "update_failed": {
+      "label": "DNS-Update fehlgeschlagen",
+      "hint": "Einmal je neuem Fehler, nicht bei jeder Wiederholung."
+    },
+    "update_recovered": {
+      "label": "DNS-Update wieder OK",
+      "hint": "Ein zuvor fehlerhafter Record ist wieder aktuell."
+    },
+    "tunnel_status": {
+      "label": "Tunnel-Statuswechsel",
+      "hint": "z. B. verbunden → getrennt."
+    }
+  },
+  "webhooks": {
+    "title": "Benachrichtigungen (Webhooks)",
+    "subtitle": "Beliebige Dienste per HTTP-Anfrage benachrichtigen – Vorlagen für ntfy, Gotify, Discord, Slack, Telegram und Home Assistant.",
+    "loadError": "Webhooks konnten nicht geladen werden: {{error}}",
+    "empty": "Noch keine Webhooks.",
+    "add": "Webhook hinzufügen",
+    "addTitle": "Webhook hinzufügen",
+    "editTitle": "Webhook bearbeiten",
+    "activeLabel": "{{name}} aktiv",
+    "editLabel": "{{name}} bearbeiten",
+    "deleteLabel": "{{name}} löschen",
+    "inactive": "inaktiv",
+    "test": "Testen",
+    "testDelivered": "Testnachricht zugestellt",
+    "noEvents": "Kein Ereignis ausgewählt – sendet nur Testnachrichten",
+    "missingEnv": "Nicht gesetzt: <code>{{names}}</code> – in deploy/.env eintragen und Container neu starten.",
+    "saveFailed": "Speichern fehlgeschlagen: {{error}}",
+    "lastFailed": "Letzte Zustellung fehlgeschlagen: {{error}}",
+    "lastSent": "Zuletzt zugestellt {{time}}",
+    "nothingSent": "Noch nichts gesendet",
+    "deleteTitle": "Webhook löschen?",
+    "deleteHint": "„{{name}}“ wird gelöscht und erhält keine Benachrichtigungen mehr. Die Env-Variablen in deploy/.env bleiben unverändert.",
+    "secretsHint": "Geheimnisse nie direkt eintragen: in URL und Headern als <code>{{urlVar}}</code>, im Body als <code>{{bodyVar}}</code>. Die Werte gehören in <code>deploy/.env</code>.",
+    "preset": "Vorlage",
+    "presetGeneric": "Allgemein (JSON)",
+    "name": "Name",
+    "envIntro": "In deploy/.env eintragen, dann Container neu starten:",
+    "env": {
+      "WEBHOOK_NTFY_TOPIC": "Topic-Name (wie ein Passwort behandeln)",
+      "WEBHOOK_GOTIFY_TOKEN": "App-Token aus Gotify",
+      "WEBHOOK_DISCORD_URL": "komplette Webhook-URL aus den Kanaleinstellungen",
+      "WEBHOOK_SLACK_URL": "Incoming-Webhook-URL",
+      "WEBHOOK_TELEGRAM_TOKEN": "Bot-Token von @BotFather",
+      "WEBHOOK_TELEGRAM_CHAT_ID": "Chat-ID des Empfängers",
+      "WEBHOOK_HA_ID": "Webhook-ID der Automation"
+    },
+    "method": "Methode",
+    "noHeaders": "Keine zusätzlichen Header.",
+    "headerName": "Header {{n}} Name",
+    "headerValue": "Header {{n}} Wert",
+    "headerValuePlaceholder": "Wert, z. B. {{example}}",
+    "headerRemove": "Header {{n}} entfernen",
+    "body": "Body-Template",
+    "bodyPlaceholder": "Leer = Standard-JSON mit type, title, message, priority, time, data",
+    "bodyHelp": "Verfügbar: <code>{{fields}}</code> · Funktionen: <code>json</code> (für JSON-Werte), <code>env</code>, <code>{{funcs}}</code>",
+    "sendOn": "Senden bei",
+    "active": "Aktiv",
+    "preview": "Vorschau",
+    "sampleEvent": "Beispielereignis",
+    "sample": "Beispiel: {{event}}",
+    "previewHint": "Platzhalter bleiben in der Vorschau sichtbar – Werte werden nie angezeigt."
+  },
+  "system": {
+    "title": "System",
+    "hint": "Zugangsdaten werden nie angezeigt, nur ob sie gesetzt sind.",
+    "version": "Version",
+    "cfToken": "Cloudflare-Token",
+    "cfAccount": "Cloudflare-Account-ID",
+    "dataDir": "Datenverzeichnis",
+    "set": "gesetzt",
+    "missing": "fehlt"
+  }
+}
