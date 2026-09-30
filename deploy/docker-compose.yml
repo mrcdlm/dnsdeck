@@ -1,10 +1,12 @@
 # Produktion: Image von ghcr.io (gebaut von .github/workflows/release.yml).
-# Aktualisieren:  docker compose pull && docker compose up -d
+# Aktualisieren: DNSDECK_VERSION in .env erhöhen, dann
+#   docker compose pull && docker compose up -d
 # Lokal aus dem Quellcode bauen: docker-compose.dev.yml
 services:
   dnsdeck:
-    # :latest = neuestes Release; für feste Versionen z. B. :1.0.0 oder :1
-    image: ghcr.io/mrcdlm/dnsdeck:latest
+    # Feste Version aus .env (DNSDECK_VERSION), nie latest: Updates bewusst
+    # nach Lesen der Release Notes (github.com/mrcdlm/dnsdeck/releases).
+    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?DNSDECK_VERSION in .env setzen, z. B. 0.1.0}
     container_name: dnsdeck
     restart: unless-stopped
     ports:

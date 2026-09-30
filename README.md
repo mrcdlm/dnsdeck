@@ -26,7 +26,9 @@ mkdir -p data && sudo chown 65532:65532 data   # Container läuft als UID 65532
 docker compose pull && docker compose up -d
 ```
 
-Aktualisieren: `docker compose pull && docker compose up -d`. Das Dashboard ist
+Die Version ist fest in `.env` eingetragen (`DNSDECK_VERSION=0.1.0`, ohne „v“) –
+bewusst nie `latest`. Aktualisieren: Release Notes lesen, `DNSDECK_VERSION` erhöhen,
+dann `docker compose pull && docker compose up -d`. Das Dashboard ist
 unter `http://<server>:8080` erreichbar (Healthcheck: `/healthz`). Nicht ohne HTTPS
 ins Internet stellen – z. B. über einen Cloudflare Tunnel veröffentlichen.
 
