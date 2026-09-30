@@ -6,8 +6,9 @@ package ipdetect
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"strings"
+
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 type Family string
@@ -82,5 +83,5 @@ func parseTrace(body []byte) (string, error) {
 			return strings.TrimSpace(v), nil
 		}
 	}
-	return "", errors.New("keine ip=-Zeile in trace-Antwort")
+	return "", i18n.E("ip.trace_no_ip")
 }

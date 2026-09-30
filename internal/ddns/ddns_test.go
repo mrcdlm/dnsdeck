@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
@@ -49,6 +50,7 @@ func (e *env) get(t *testing.T, id int64) store.Record {
 	if err != nil {
 		t.Fatal(err)
 	}
+	r.Message = i18n.T(i18n.DE, r.MessageMsg) // Tests prüfen die deutsche Fassung
 	return r
 }
 
@@ -57,6 +59,9 @@ func (e *env) logs(t *testing.T) []store.UpdateLogEntry {
 	l, err := e.st.ListUpdateLog(context.Background(), store.UpdateLogFilter{}, 100)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for i := range l {
+		l[i].Message = i18n.T(i18n.DE, l[i].MessageMsg)
 	}
 	return l
 }
@@ -257,7 +262,7 @@ func TestDisabledAndNotConfigured(t *testing.T) {
 	e.st.UpdateRecordSettings(ctx, r)
 	u := NewUpdater(e.st, nil, slog.New(slog.DiscardHandler))
 	got, err := u.SyncRecord(ctx, r.ID, ips1, store.TriggerManual)
-	if err != nil || got.Status != store.RecordError || got.Message == "" {
+	if err != nil || got.Status != store.RecordError || got.MessageMsg.Code != "cf.not_configured" {
 		t.Fatalf("ohne Provider: %v %+v", err, got)
 	}
 }

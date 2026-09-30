@@ -69,7 +69,7 @@ func TestWebhooksAPI(t *testing.T) {
 	}
 
 	// Fehlende Variable → Test schlägt mit verständlicher Meldung fehl
-	res := decode[notify.TestResult](t, e.do(t, "POST", fmt.Sprintf("/api/webhooks/%d/test", wh.ID), "", c))
+	res := decode[testResult](t, e.do(t, "POST", fmt.Sprintf("/api/webhooks/%d/test", wh.ID), "", c))
 	if res.OK || !strings.Contains(res.Error, "WEBHOOK_FEHLT ist nicht gesetzt") {
 		t.Fatalf("test ohne Variable: %+v", res)
 	}
@@ -80,7 +80,7 @@ func TestWebhooksAPI(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("update: %d", resp.StatusCode)
 	}
-	res = decode[notify.TestResult](t, e.do(t, "POST", fmt.Sprintf("/api/webhooks/%d/test", wh.ID), "", c))
+	res = decode[testResult](t, e.do(t, "POST", fmt.Sprintf("/api/webhooks/%d/test", wh.ID), "", c))
 	if !res.OK || e.hooks.Load() != 1 {
 		t.Fatalf("test: %+v hooks=%d", res, e.hooks.Load())
 	}
@@ -147,5 +147,41 @@ func TestHistoryFilters(t *testing.T) {
 	ch := decode[[]store.TunnelChange](t, e.do(t, "GET", "/api/tunnels/history", "", c))
 	if len(ch) != 1 || ch[0].TunnelName != "home" || ch[0].From != "" || ch[0].To != "healthy" {
 		t.Fatalf("tunnel history: %+v", ch)
+	}
+}
+
+type testResult struct {
+	OK    bool   `json:"ok"`
+	Error string `json:"error"`
+}
+
+func TestLanguageFromAcceptLanguage(t *testing.T) {
+	e := newTestEnv(t, nil)
+	c := e.login(t)
+	body := `{"zone_id":"z1","name":"home.example.org","type":"A"}`
+
+	e.language = "en-US"
+	resp := e.do(t, "POST", "/api/records", body, c)
+	en := decode[map[string]any](t, resp)
+	if resp.StatusCode != 400 || en["error"] != "The name must be within the zone example.com" || en["code"] != "record.name_outside_zone" {
+		t.Fatalf("en: %d %v", resp.StatusCode, en)
+	}
+	e.language = "de-DE,de;q=0.9"
+	de := decode[map[string]any](t, e.do(t, "POST", "/api/records", body, c))
+	if de["error"] != "Name muss in der Zone example.com liegen" {
+		t.Fatalf("de: %v", de)
+	}
+
+	// gespeicherte Meldung (Record-Status) in beiden Sprachen
+	rec := decode[store.Record](t, e.do(t, "POST", "/api/records", `{"zone_id":"z1","name":"x.example.com","type":"A"}`, c))
+	e.cf.Fail(500)
+	e.do(t, "POST", fmt.Sprintf("/api/records/%d/sync", rec.ID), "", c)
+	e.cf.Fail(0)
+	for lang, want := range map[string]string{"en": "Cloudflare API: HTTP 500", "de": "Cloudflare-API: HTTP 500"} {
+		e.language = lang
+		recs := decode[[]store.Record](t, e.do(t, "GET", "/api/records", "", c))
+		if len(recs) != 1 || !strings.HasPrefix(recs[0].Message, want) {
+			t.Fatalf("%s: %+v", lang, recs)
+		}
 	}
 }

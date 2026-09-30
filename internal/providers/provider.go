@@ -7,10 +7,10 @@ import (
 )
 
 // ErrNotFound: der Eintrag existiert beim Anbieter nicht.
-var ErrNotFound = errors.New("Eintrag beim Anbieter nicht gefunden")
+var ErrNotFound = errors.New("record not found at provider")
 
 // ErrNotConfigured: dem Anbieter fehlen Zugangsdaten.
-var ErrNotConfigured = errors.New("Anbieter nicht konfiguriert")
+var ErrNotConfigured = errors.New("provider not configured")
 
 // Record ist ein DNS-Eintrag (A oder AAAA) bei einem Anbieter.
 type Record struct {

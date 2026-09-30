@@ -2,13 +2,15 @@ package ipdetect
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 const maxBody = 4 << 10
@@ -17,7 +19,9 @@ const maxBody = 4 << 10
 type Observation struct {
 	Source string `json:"source"`
 	IP     string `json:"ip,omitempty"`
-	Error  string `json:"error,omitempty"`
+	// Error: von der API gerenderter Text; ErrorMsg: übersetzbare Meldung.
+	Error    string   `json:"error,omitempty"`
+	ErrorMsg i18n.Msg `json:"-"`
 }
 
 // Detector fragt alle Quellen einer Adressfamilie parallel ab.
@@ -79,7 +83,7 @@ func (d *Detector) Observe(ctx context.Context, f Family) ([]netip.Addr, []Obser
 			a, err := d.fetch(ctx, s)
 			obs[i] = Observation{Source: s.Name}
 			if err != nil {
-				obs[i].Error = err.Error()
+				obs[i].ErrorMsg = i18n.FromError(err)
 				return
 			}
 			obs[i].IP = a.String()
@@ -109,7 +113,7 @@ func (d *Detector) fetch(ctx context.Context, s Source) (netip.Addr, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return netip.Addr{}, fmt.Errorf("HTTP %d", resp.StatusCode)
+		return netip.Addr{}, i18n.E("ip.http", "status", strconv.Itoa(resp.StatusCode))
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
@@ -128,21 +132,21 @@ var cgnat = netip.MustParsePrefix("100.64.0.0/10")
 func Validate(raw string, f Family) (netip.Addr, error) {
 	a, err := netip.ParseAddr(raw)
 	if err != nil {
-		return netip.Addr{}, fmt.Errorf("keine IP-Adresse: %q", truncate(raw, 64))
+		return netip.Addr{}, i18n.E("ip.not_ip", "value", strconv.Quote(truncate(raw, 64)))
 	}
 	a = a.WithZone("")
 	switch f {
 	case IPv4:
 		if !a.Is4() {
-			return netip.Addr{}, fmt.Errorf("keine IPv4-Adresse: %s", a)
+			return netip.Addr{}, i18n.E("ip.not_v4", "ip", a.String())
 		}
 	case IPv6:
 		if !a.Is6() || a.Is4In6() {
-			return netip.Addr{}, fmt.Errorf("keine IPv6-Adresse: %s", a)
+			return netip.Addr{}, i18n.E("ip.not_v6", "ip", a.String())
 		}
 	}
 	if !a.IsGlobalUnicast() || a.IsPrivate() || cgnat.Contains(a) {
-		return netip.Addr{}, fmt.Errorf("keine öffentliche Adresse: %s", a)
+		return netip.Addr{}, i18n.E("ip.not_public", "ip", a.String())
 	}
 	return a, nil
 }

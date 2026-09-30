@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
@@ -53,7 +54,7 @@ type Monitor struct {
 	pollMu sync.Mutex // serialisiert Abfragen
 	mu     sync.Mutex
 	last   *time.Time
-	err    string
+	err    i18n.Msg
 	purged time.Time
 }
 
@@ -88,7 +89,7 @@ func (m *Monitor) Poll(ctx context.Context) error {
 	list, err := m.client.ListTunnels(ctx, m.accountID)
 	now := m.now()
 	if err != nil {
-		m.setResult(now, err.Error())
+		m.setResult(now, i18n.FromError(err))
 		return err
 	}
 
@@ -126,11 +127,11 @@ func (m *Monitor) Poll(ctx context.Context) error {
 		}
 		m.purged = now
 	}
-	m.setResult(now, "")
+	m.setResult(now, i18n.Msg{})
 	return nil
 }
 
-func (m *Monitor) setResult(at time.Time, errMsg string) {
+func (m *Monitor) setResult(at time.Time, errMsg i18n.Msg) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.last, m.err = &at, errMsg
@@ -154,9 +155,11 @@ type TunnelView struct {
 }
 
 type Overview struct {
-	Configured      bool         `json:"configured"`
-	LastPoll        *time.Time   `json:"last_poll,omitempty"`
+	Configured bool       `json:"configured"`
+	LastPoll   *time.Time `json:"last_poll,omitempty"`
+	// Error: von der API gerenderter Text; ErrorMsg: übersetzbare Meldung.
 	Error           string       `json:"error,omitempty"`
+	ErrorMsg        i18n.Msg     `json:"-"`
 	IntervalSeconds int          `json:"interval_seconds"`
 	Tunnels         []TunnelView `json:"tunnels"`
 }
@@ -164,7 +167,7 @@ type Overview struct {
 // Overview liefert alle Tunnels mit Uptime für die Anzeige.
 func (m *Monitor) Overview(ctx context.Context) (Overview, error) {
 	m.mu.Lock()
-	o := Overview{Configured: m.Configured(), LastPoll: m.last, Error: m.err,
+	o := Overview{Configured: m.Configured(), LastPoll: m.last, ErrorMsg: m.err,
 		IntervalSeconds: int(m.interval().Seconds()), Tunnels: []TunnelView{}}
 	m.mu.Unlock()
 

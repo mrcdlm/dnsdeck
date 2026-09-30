@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 func TestRecordsCRUD(t *testing.T) {
@@ -31,19 +33,19 @@ func TestRecordsCRUD(t *testing.T) {
 	}
 	// Fehler behält IP und Provider-ID
 	if err := s.SetRecordSyncState(ctx, r.ID, RecordSyncState{Status: RecordError,
-		Message: "kaputt", CheckedAt: now.Add(time.Minute)}); err != nil {
+		Message: i18n.Raw("kaputt"), CheckedAt: now.Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
 	r, _ = s.GetRecord(ctx, r.ID)
 	if r.ProviderRecordID != "cf1" || r.CurrentIP != "203.0.113.1" || r.Status != RecordError ||
-		r.Message != "kaputt" || r.LastChangedAt == nil || !r.LastChangedAt.Equal(now) {
+		i18n.T(i18n.DE, r.MessageMsg) != "kaputt" || r.LastChangedAt == nil || !r.LastChangedAt.Equal(now) {
 		t.Fatalf("Sync-State: %+v", r)
 	}
 
 	// Nur TTL geändert → Provider-ID bleibt
 	r.TTL = 300
 	r, err = s.UpdateRecordSettings(ctx, r)
-	if err != nil || r.ProviderRecordID != "cf1" || r.TTL != 300 || r.Status != RecordPending || r.Message != "" {
+	if err != nil || r.ProviderRecordID != "cf1" || r.TTL != 300 || r.Status != RecordPending || !r.MessageMsg.IsZero() {
 		t.Fatalf("Settings: %v %+v", err, r)
 	}
 	// Name geändert → Provider-ID verworfen; deaktiviert → paused
@@ -81,7 +83,7 @@ func TestUpdateLogFilter(t *testing.T) {
 	b, _ := s.CreateRecord(ctx, Record{ZoneID: "z", ZoneName: "e.com", Name: "b.e.com", Type: "A", TTL: 1, Enabled: true})
 	for _, id := range []int64{a.ID, b.ID, a.ID} {
 		s.InsertUpdateLog(ctx, UpdateLogEntry{RecordID: &id, RecordName: "x", RecordType: "A",
-			Trigger: TriggerScheduled, Result: ResultError, Message: "m", CreatedAt: time.Now()})
+			Trigger: TriggerScheduled, Result: ResultError, MessageMsg: i18n.Raw("m"), CreatedAt: time.Now()})
 	}
 	if l, _ := s.ListUpdateLog(ctx, UpdateLogFilter{RecordID: a.ID}, 10); len(l) != 2 {
 		t.Fatalf("Filter a: %d", len(l))

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -48,7 +49,7 @@ func recorder(t *testing.T, status int) (*httptest.Server, func() []captured) {
 	}
 }
 
-var ev = SampleEvent(EventTunnelStatus)
+var ev = Localize(SampleEvent(EventTunnelStatus), i18n.DE)
 
 func TestRenderTemplateAndPlaceholders(t *testing.T) {
 	w := store.Webhook{
@@ -124,7 +125,7 @@ func TestPlaceholderSecurity(t *testing.T) {
 
 	// Fehlende Variable
 	if _, err := Render(store.Webhook{Method: "POST", URL: "https://x/${WEBHOOK_FEHLT}"}, ev, env); err == nil ||
-		!strings.Contains(err.Error(), "WEBHOOK_FEHLT ist nicht gesetzt") {
+		!strings.Contains(i18n.T(i18n.DE, i18n.FromError(err)), "WEBHOOK_FEHLT ist nicht gesetzt") {
 		t.Fatalf("fehlende Variable: %v", err)
 	}
 	if m := MissingEnv(store.Webhook{URL: "${WEBHOOK_OK}/${WEBHOOK_FEHLT}", BodyTemplate: `{{env "WEBHOOK_AUCH"}}`}, env); strings.Join(m, ",") != "WEBHOOK_FEHLT,WEBHOOK_AUCH" {
@@ -231,15 +232,15 @@ func TestDispatcher(t *testing.T) {
 		t.Fatalf("SendTest: %+v %v", res, err)
 	}
 	res, _ = d.SendTest(context.Background(), 2)
-	if res.OK || res.Error != "HTTP 500" || len(gotBad()) != 4 {
+	if res.OK || i18n.T(i18n.EN, res.Error) != "HTTP 500" || len(gotBad()) != 4 {
 		t.Fatalf("SendTest Fehler: %+v, %d Versuche", res, len(gotBad()))
 	}
 
 	// Verbindungsfehler: Meldung ohne URL
 	st.hooks = []store.Webhook{{ID: 9, Name: "x", Method: "POST", URL: "http://127.0.0.1:1/${WEBHOOK_PATH}?token=geheim"}}
 	res, _ = d.SendTest(context.Background(), 9)
-	if res.OK || strings.Contains(res.Error, "geheim") || strings.Contains(res.Error, "127.0.0.1:1/p") {
-		t.Fatalf("Geheimnis in Fehlermeldung: %q", res.Error)
+	if text := i18n.T(i18n.DE, res.Error); res.OK || strings.Contains(text, "geheim") || strings.Contains(text, "127.0.0.1:1/p") {
+		t.Fatalf("Geheimnis in Fehlermeldung: %q", text)
 	}
 	var nilNotifier Notifier
 	Send(nilNotifier, ev)
@@ -302,7 +303,7 @@ func TestRedirectToOtherHostNotFollowed(t *testing.T) {
 		URL: redirect.URL, Headers: []store.Header{{Name: "X-Gotify-Key", Value: "${WEBHOOK_KEY}"}}}}}
 	d := NewDispatcher(st, envMap(map[string]string{"WEBHOOK_KEY": "geheim"}), slog.New(slog.DiscardHandler))
 	res, _ := d.SendTest(context.Background(), 1)
-	if res.OK || !strings.Contains(res.Error, "Weiterleitung") || len(gotTarget()) != 0 {
+	if res.OK || !strings.Contains(i18n.T(i18n.DE, res.Error), "Weiterleitung") || len(gotTarget()) != 0 {
 		t.Fatalf("Weiterleitung verfolgt: %+v, %d Anfragen beim Ziel", res, len(gotTarget()))
 	}
 }
@@ -341,5 +342,24 @@ func TestParallelDelivery(t *testing.T) {
 	}
 	if pub.n.Load() != 1 {
 		t.Fatalf("Live-Ereignis nach Zustellung fehlt: %d", pub.n.Load())
+	}
+}
+
+func TestNotificationLanguage(t *testing.T) {
+	rec, got := recorder(t, 200)
+	st := &memStore{result: map[int64]error{}, hooks: []store.Webhook{{ID: 1, Name: "x", Enabled: true, Method: "POST",
+		URL: rec.URL, ContentType: "text/plain", BodyTemplate: "{{.Title}}", Events: []string{EventTunnelStatus}}}}
+	lang := i18n.EN
+	d := NewDispatcher(st, envMap(nil), slog.New(slog.DiscardHandler))
+	d.Lang = func() i18n.Lang { return lang }
+	d.SendTest(context.Background(), 1)
+	lang = i18n.DE
+	d.SendTest(context.Background(), 1)
+	if c := got(); len(c) != 2 || c[0].body != "dnsdeck: test message" || c[1].body != "dnsdeck: Testnachricht" {
+		t.Fatalf("Sprache: %+v", c)
+	}
+	p, err := d.Preview(st.hooks[0], EventTunnelStatus)
+	if err != nil || p.Body != "Tunnel home: getrennt" {
+		t.Fatalf("Vorschau: %+v %v", p, err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
@@ -124,8 +125,8 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/info", s.handleInfo)
 		})
 
-		r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
-			writeError(w, http.StatusNotFound, "nicht gefunden")
+		r.NotFound(func(w http.ResponseWriter, req *http.Request) {
+			writeMsg(w, req, http.StatusNotFound, i18n.M("api.not_found"))
 		})
 	})
 
@@ -148,7 +149,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	client := clientKey(r)
 	if s.auth.tooManyFailures(client) {
-		writeError(w, http.StatusTooManyRequests, "zu viele Fehlversuche, bitte kurz warten")
+		writeMsg(w, r, http.StatusTooManyRequests, i18n.M("auth.too_many_attempts"))
 		return
 	}
 
@@ -157,7 +158,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "ungültige Anfrage")
+		writeMsg(w, r, http.StatusBadRequest, i18n.M("api.bad_request"))
 		return
 	}
 
@@ -168,14 +169,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		case <-time.After(s.auth.delay):
 		case <-r.Context().Done():
 		}
-		writeError(w, http.StatusUnauthorized, "Passwort falsch")
+		writeMsg(w, r, http.StatusUnauthorized, i18n.M("auth.wrong_password"))
 		return
 	}
 
 	token, exp, err := s.auth.newSession(r.Context())
 	if err != nil {
 		s.log.Error("Session anlegen fehlgeschlagen", "err", err)
-		writeError(w, http.StatusInternalServerError, "interner Fehler")
+		writeMsg(w, r, http.StatusInternalServerError, i18n.M("api.internal"))
 		return
 	}
 	http.SetCookie(w, sessionCookieFor(r, token, exp))
@@ -199,7 +200,7 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		s.log.Error("Session prüfen fehlgeschlagen", "err", err)
-		writeError(w, http.StatusInternalServerError, "interner Fehler")
+		writeMsg(w, r, http.StatusInternalServerError, i18n.M("api.internal"))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": ok})
@@ -213,19 +214,19 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		}
 		if err != nil {
 			s.log.Error("Session prüfen fehlgeschlagen", "err", err)
-			writeError(w, http.StatusInternalServerError, "interner Fehler")
+			writeMsg(w, r, http.StatusInternalServerError, i18n.M("api.internal"))
 			return
 		}
 		if !ok {
-			writeError(w, http.StatusUnauthorized, "nicht angemeldet")
+			writeMsg(w, r, http.StatusUnauthorized, i18n.M("api.unauthorized"))
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (s *Server) handleIP(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.tracker.State())
+func (s *Server) handleIP(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.tracker.State().Localize(i18n.FromRequest(r)))
 }
 
 func (s *Server) handleIPRefresh(w http.ResponseWriter, r *http.Request) {
@@ -235,10 +236,10 @@ func (s *Server) handleIPRefresh(w http.ResponseWriter, r *http.Request) {
 	state, err := s.ddns.RunCycle(ctx, store.TriggerManual)
 	if err != nil {
 		s.log.Error("manueller Durchlauf fehlgeschlagen", "err", err)
-		writeError(w, http.StatusInternalServerError, "Aktualisierung fehlgeschlagen")
+		writeMsg(w, r, http.StatusInternalServerError, i18n.M("api.refresh_failed"))
 		return
 	}
-	writeJSON(w, http.StatusOK, state)
+	writeJSON(w, http.StatusOK, state.Localize(i18n.FromRequest(r)))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -247,8 +248,15 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+// writeMsg schreibt eine Fehlerantwort in der Sprache der Anfrage. Neben dem
+// übersetzten Text stehen Code und Parameter (für Clients und Tests).
+func writeMsg(w http.ResponseWriter, r *http.Request, status int, m i18n.Msg) {
+	writeJSON(w, status, map[string]any{"error": i18n.T(i18n.FromRequest(r), m), "code": m.Code, "params": m.Params})
+}
+
+// writeMsgs schreibt mehrere Meldungen (z. B. Validierungsfehler) als eine Antwort.
+func writeMsgs(w http.ResponseWriter, r *http.Request, status int, msgs []i18n.Msg) {
+	writeMsg(w, r, status, i18n.JoinMsgs(msgs...))
 }
 
 func noStore(next http.Handler) http.Handler {

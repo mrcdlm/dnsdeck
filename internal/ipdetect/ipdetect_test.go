@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -48,7 +49,7 @@ func TestDecide(t *testing.T) {
 			got := ""
 			if d.Confirmed() {
 				got = d.IP.String()
-			} else if d.Reason == "" {
+			} else if d.Reason.IsZero() {
 				t.Error("Begründung fehlt")
 			}
 			if got != tt.want {
@@ -146,7 +147,7 @@ func TestDetectorObserve(t *testing.T) {
 	if len(got) != 2 || len(obs) != 4 {
 		t.Fatalf("got %v, obs %+v", got, obs)
 	}
-	if obs[2].Error == "" || obs[3].Error == "" {
+	if obs[2].ErrorMsg.IsZero() || obs[3].ErrorMsg.IsZero() {
 		t.Fatalf("Fehler für c/d erwartet: %+v", obs)
 	}
 	if dec := Decide(got, netip.Addr{}); dec.IP.String() != "203.0.113.5" {
@@ -261,4 +262,22 @@ func TestTrackerPersistError(t *testing.T) {
 	if err != nil || s.IPv4.IP != "203.0.113.1" || len(st.changes) != 1 {
 		t.Fatalf("err=%v state=%+v", err, s.IPv4)
 	}
+}
+
+func TestLocalize(t *testing.T) {
+	s := State{IPv4: FamilyState{MessageMsg: Decide(nil, netip.Addr{}).Reason,
+		Sources: []Observation{{Source: "x", ErrorMsg: i18nErr(t)}}}}
+	en, de := s.Localize("en"), s.Localize("de")
+	if en.IPv4.Message != "no source reachable" || de.IPv4.Message != "keine Quelle erreichbar" {
+		t.Fatalf("Message: %q / %q", en.IPv4.Message, de.IPv4.Message)
+	}
+	if de.IPv4.Sources[0].Error != "keine öffentliche Adresse: 192.168.1.1" || s.IPv4.Sources[0].Error != "" {
+		t.Fatalf("Source-Fehler: %+v / Original verändert: %+v", de.IPv4.Sources, s.IPv4.Sources)
+	}
+}
+
+func i18nErr(t *testing.T) i18n.Msg {
+	t.Helper()
+	_, err := Validate("192.168.1.1", IPv4)
+	return i18n.FromError(err)
 }

@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 // Obergrenzen für Intervalle (Untergrenzen siehe Min*).
@@ -22,10 +25,10 @@ type settingsRW interface {
 	SetSetting(ctx context.Context, key, value string) error
 }
 
-// ValidationError ist ein Eingabefehler, der dem Benutzer angezeigt wird.
-type ValidationError struct{ Msg string }
+// ValidationError sind Eingabefehler, die dem Benutzer angezeigt werden.
+type ValidationError struct{ Msgs []i18n.Msg }
 
-func (e *ValidationError) Error() string { return e.Msg }
+func (e *ValidationError) Error() string { return i18n.Join(i18n.EN, e.Msgs) }
 
 // SettingsService hält die aktuellen Einstellungen, prüft und speichert
 // Änderungen und benachrichtigt Abonnenten, damit Änderungen ohne Neustart
@@ -48,7 +51,7 @@ func NewSettingsService(ctx context.Context, st settingsRW, sourceNames []string
 		if slices.Contains(sourceNames, n) {
 			known = append(known, n)
 		} else {
-			warnings = append(warnings, fmt.Errorf("unbekannte IP-Quelle %q ignoriert", n))
+			warnings = append(warnings, fmt.Errorf("unknown IP source %q ignored", n))
 		}
 	}
 	cur.IPSources = known
@@ -82,6 +85,7 @@ func (s *SettingsService) Update(ctx context.Context, next Settings) (Settings, 
 		{KeyIPCheckInterval, next.IPCheckInterval.String()},
 		{KeyTunnelInterval, next.TunnelInterval.String()},
 		{KeyIPSources, strings.Join(next.IPSources, ",")},
+		{KeyNotifyLanguage, next.NotifyLanguage},
 	} {
 		if err := s.store.SetSetting(ctx, kv[0], kv[1]); err != nil {
 			return Settings{}, err
@@ -100,28 +104,32 @@ func (s *SettingsService) Update(ctx context.Context, next Settings) (Settings, 
 }
 
 func (s *SettingsService) validate(n Settings) error {
-	var msgs []string
+	var msgs []i18n.Msg
+	add := func(code string, kv ...string) { msgs = append(msgs, i18n.M(code, kv...)) }
 	if n.IPCheckInterval < MinIPCheckInterval || n.IPCheckInterval > MaxIPCheckInterval {
-		msgs = append(msgs, fmt.Sprintf("IP-Prüfintervall muss zwischen %s und %s liegen", MinIPCheckInterval, MaxIPCheckInterval))
+		add("settings.ip_interval_range", "min", MinIPCheckInterval.String(), "max", MaxIPCheckInterval.String())
 	}
 	if n.TunnelInterval < MinTunnelInterval || n.TunnelInterval > MaxTunnelInterval {
-		msgs = append(msgs, fmt.Sprintf("Tunnel-Intervall muss zwischen %s und %s liegen", MinTunnelInterval, MaxTunnelInterval))
+		add("settings.tunnel_interval_range", "min", MinTunnelInterval.String(), "max", MaxTunnelInterval.String())
 	}
 	seen := map[string]bool{}
 	for _, name := range n.IPSources {
 		if !slices.Contains(s.sourceNames, name) {
-			msgs = append(msgs, fmt.Sprintf("unbekannte IP-Quelle %q", name))
+			add("settings.source_unknown", "name", strconv.Quote(name))
 		}
 		if seen[name] {
-			msgs = append(msgs, fmt.Sprintf("IP-Quelle %q doppelt", name))
+			add("settings.source_duplicate", "name", strconv.Quote(name))
 		}
 		seen[name] = true
 	}
 	if len(n.IPSources) < MinIPSources {
-		msgs = append(msgs, fmt.Sprintf("mindestens %d IP-Quellen auswählen (Mehrheitsentscheid)", MinIPSources))
+		add("settings.sources_min", "min", strconv.Itoa(MinIPSources))
+	}
+	if n.NotifyLanguage != "de" && n.NotifyLanguage != "en" {
+		add("settings.language_invalid")
 	}
 	if len(msgs) > 0 {
-		return &ValidationError{Msg: strings.Join(msgs, "; ")}
+		return &ValidationError{Msgs: msgs}
 	}
 	return nil
 }

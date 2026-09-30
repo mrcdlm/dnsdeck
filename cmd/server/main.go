@@ -17,6 +17,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/config"
 	"github.com/mrcdlm/dnsdeck/internal/ddns"
 	"github.com/mrcdlm/dnsdeck/internal/events"
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
@@ -73,7 +74,7 @@ func run() error {
 	}
 	st, err := store.Open(ctx, filepath.Join(cfg.DataDir, "app.db"))
 	if err != nil {
-		return fmt.Errorf("Datenbank öffnen: %w", err)
+		return fmt.Errorf("open database: %w", err)
 	}
 	defer st.Close()
 
@@ -90,6 +91,7 @@ func run() error {
 	broker := events.NewBroker()
 	dispatcher := notify.NewDispatcher(st, os.LookupEnv, log)
 	dispatcher.Pub = broker
+	dispatcher.Lang = func() i18n.Lang { return i18n.Parse(settings.Get().NotifyLanguage) }
 	for _, old := range []string{"NOTIFY_WEBHOOK_URL", "NOTIFY_NTFY_URL", "NOTIFY_GOTIFY_URL"} {
 		if os.Getenv(old) != "" {
 			log.Warn(old + " wird nicht mehr unterstützt – Webhook unter Einstellungen anlegen (Vorlagen für ntfy, Gotify u. a.)")
@@ -100,7 +102,7 @@ func run() error {
 	tracker.SetPublisher(broker)
 	tracker.Notifier = dispatcher
 	if err := tracker.Load(ctx); err != nil {
-		return fmt.Errorf("IP-Zustand laden: %w", err)
+		return fmt.Errorf("load IP state: %w", err)
 	}
 
 	// Ohne Token läuft die App weiter; Records zeigen dann einen Fehlerstatus.
@@ -217,21 +219,17 @@ func run() error {
 	return nil
 }
 
-var tunnelLabel = map[string]string{
-	tunnels.StatusHealthy: "verbunden", tunnels.StatusDegraded: "eingeschränkt",
-	tunnels.StatusDown: "getrennt", tunnels.StatusInactive: "inaktiv",
-}
-
 func tunnelEvent(c tunnels.Change) notify.Event {
 	prio := notify.PriorityDefault
 	if c.To == tunnels.StatusDown || c.To == tunnels.StatusInactive {
 		prio = notify.PriorityHigh
 	}
+	from, to := i18n.Ref("tunnel."+c.From), i18n.Ref("tunnel."+c.To)
 	return notify.Event{
 		Type: notify.EventTunnelStatus, Priority: prio, Time: c.At,
-		Title:   fmt.Sprintf("Tunnel %s: %s", c.Name, tunnelLabel[c.To]),
-		Message: fmt.Sprintf("Status %s → %s", tunnelLabel[c.From], tunnelLabel[c.To]),
-		Data:    map[string]string{"tunnel": c.Name, "tunnel_id": c.TunnelID, "from": c.From, "to": c.To},
+		TitleMsg:   i18n.M("notify.tunnel.title", "name", c.Name, "to", to),
+		MessageMsg: i18n.M("notify.tunnel.message", "from", from, "to", to),
+		Data:       map[string]string{"tunnel": c.Name, "tunnel_id": c.TunnelID, "from": c.From, "to": c.To},
 	}
 }
 
@@ -239,12 +237,12 @@ func tunnelEvent(c tunnels.Change) notify.Event {
 // fehlt oder (typisch bei Bind-Mounts) dem Container-User nicht gehört.
 func ensureWritable(dir string) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("Datenverzeichnis %s nicht anlegbar: %w", dir, err)
+		return fmt.Errorf("cannot create data directory %s: %w", dir, err)
 	}
 	f, err := os.CreateTemp(dir, ".write-test-*")
 	if err != nil {
-		return fmt.Errorf("Datenverzeichnis %s nicht beschreibbar (UID %d) – "+
-			"auf dem Host z. B. 'sudo chown %d:%d <pfad>/data' ausführen: %w",
+		return fmt.Errorf("data directory %s is not writable for UID %d – "+
+			"on the host run e.g. 'sudo chown %d:%d <path>/data': %w",
 			dir, os.Getuid(), os.Getuid(), os.Getgid(), err)
 	}
 	f.Close()

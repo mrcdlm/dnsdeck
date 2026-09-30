@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/config"
 	"github.com/mrcdlm/dnsdeck/internal/events"
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 )
 
 type settingsService interface {
@@ -32,6 +34,7 @@ type settingsDTO struct {
 	IPCheckIntervalSeconds int            `json:"ip_check_interval_seconds"`
 	TunnelIntervalSeconds  int            `json:"tunnel_interval_seconds"`
 	IPSources              []ipSourceDTO  `json:"ip_sources"` // Reihenfolge = Priorität
+	NotifyLanguage         string         `json:"notify_language"`
 	Limits                 map[string]int `json:"limits"`
 }
 
@@ -51,6 +54,7 @@ func (s *Server) settingsToDTO(c config.Settings) settingsDTO {
 		IPCheckIntervalSeconds: int(c.IPCheckInterval.Seconds()),
 		TunnelIntervalSeconds:  int(c.TunnelInterval.Seconds()),
 		IPSources:              sources,
+		NotifyLanguage:         c.NotifyLanguage,
 		Limits: map[string]int{
 			"ip_check_interval_min": int(config.MinIPCheckInterval.Seconds()),
 			"ip_check_interval_max": int(config.MaxIPCheckInterval.Seconds()),
@@ -70,9 +74,9 @@ func contains(list []string, v string) bool {
 	return false
 }
 
-func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	if s.settings == nil {
-		writeError(w, http.StatusServiceUnavailable, "Einstellungen nicht verfügbar")
+		writeMsg(w, r, http.StatusServiceUnavailable, i18n.M("api.settings_unavailable"))
 		return
 	}
 	writeJSON(w, http.StatusOK, s.settingsToDTO(s.settings.Get()))
@@ -80,13 +84,14 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	if s.settings == nil {
-		writeError(w, http.StatusServiceUnavailable, "Einstellungen nicht verfügbar")
+		writeMsg(w, r, http.StatusServiceUnavailable, i18n.M("api.settings_unavailable"))
 		return
 	}
 	var in struct {
 		IPCheckIntervalSeconds int            `json:"ip_check_interval_seconds"`
 		TunnelIntervalSeconds  int            `json:"tunnel_interval_seconds"`
 		IPSources              []ipSourceDTO  `json:"ip_sources"`
+		NotifyLanguage         string         `json:"notify_language"`
 		Limits                 map[string]int `json:"limits"` // wird ignoriert (Rückgabe von GET)
 	}
 	if !decodeJSON(w, r, &in) {
@@ -95,6 +100,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	next := s.settings.Get()
 	next.IPCheckInterval = time.Duration(in.IPCheckIntervalSeconds) * time.Second
 	next.TunnelInterval = time.Duration(in.TunnelIntervalSeconds) * time.Second
+	if in.NotifyLanguage != "" {
+		next.NotifyLanguage = in.NotifyLanguage
+	}
 	next.IPSources = nil
 	for _, src := range in.IPSources {
 		if src.Enabled {
@@ -103,12 +111,13 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	saved, err := s.settings.Update(r.Context(), next)
-	if config.IsValidation(err) {
-		writeError(w, http.StatusBadRequest, err.Error())
+	var verr *config.ValidationError
+	if errors.As(err, &verr) {
+		writeMsgs(w, r, http.StatusBadRequest, verr.Msgs)
 		return
 	}
 	if err != nil {
-		s.internalError(w, "Einstellungen speichern", err)
+		s.internalError(w, r, "Einstellungen speichern", err)
 		return
 	}
 	s.log.Info("Einstellungen geändert", "ip_check_interval", saved.IPCheckInterval,

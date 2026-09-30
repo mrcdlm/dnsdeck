@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
 )
@@ -66,7 +67,7 @@ func TestMultipleRecords(t *testing.T) {
 		fake.AddRecord(cftest.Record{ZoneID: "z1", Name: "rr.example.com", Type: "A", Content: ip, TTL: 1})
 	}
 	_, err := c.GetRecord(context.Background(), "z1", "rr.example.com", "A")
-	if err == nil || !strings.Contains(err.Error(), "2 A-Einträge") {
+	if err == nil || !strings.Contains(i18n.T(i18n.DE, i18n.FromError(err)), "2 A-Einträge") {
 		t.Fatalf("Fehler erwartet, bekam %v", err)
 	}
 }
