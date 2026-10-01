@@ -77,3 +77,15 @@ func TestLoadDNSCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadISPLookup(t *testing.T) {
+	for v, want := range map[string]bool{"": true, "on": true, "OFF": false} {
+		c, err := Load(env(map[string]string{"APP_PASSWORD": "x", "ISP_LOOKUP": v}))
+		if err != nil || c.ISPLookup != want {
+			t.Errorf("ISP_LOOKUP=%q: %v %v", v, c, err)
+		}
+	}
+	if _, err := Load(env(map[string]string{"APP_PASSWORD": "x", "ISP_LOOKUP": "ja"})); err == nil {
+		t.Error("expected error")
+	}
+}

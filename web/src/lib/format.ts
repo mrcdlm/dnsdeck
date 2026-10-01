@@ -5,7 +5,10 @@ import i18n, { currentLang } from '@/i18n'
 const locales = { de: 'de-DE', en: 'en-US' } as const
 
 // Formatierer je Sprache zwischenspeichern
-const cache = new Map<string, { rtf: Intl.RelativeTimeFormat; dtf: Intl.DateTimeFormat; nf: Intl.NumberFormat }>()
+const cache = new Map<
+  string,
+  { rtf: Intl.RelativeTimeFormat; dtf: Intl.DateTimeFormat; nf: Intl.NumberFormat; regions: Intl.DisplayNames }
+>()
 function fmt() {
   const lang = currentLang()
   let f = cache.get(lang)
@@ -14,6 +17,7 @@ function fmt() {
       rtf: new Intl.RelativeTimeFormat(lang, { numeric: 'auto' }),
       dtf: new Intl.DateTimeFormat(locales[lang], { dateStyle: 'medium', timeStyle: 'short' }),
       nf: new Intl.NumberFormat(locales[lang], { maximumFractionDigits: 2 }),
+      regions: new Intl.DisplayNames(locales[lang], { type: 'region' }),
     }
     cache.set(lang, f)
   }
@@ -48,6 +52,15 @@ export function formatNumber(n: number): string {
 }
 
 /** Liefert die aktuelle Zeit und aktualisiert sie regelmäßig (für relative Angaben). */
+/** Ländername zum ISO-Code, z. B. "DE" → "Deutschland"; unbekannte Codes unverändert. */
+export function countryName(code: string): string {
+  try {
+    return fmt().regions.of(code) ?? code
+  } catch {
+    return code
+  }
+}
+
 export function useNow(intervalMs = 30_000): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {

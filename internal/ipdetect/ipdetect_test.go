@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
+	"github.com/mrcdlm/dnsdeck/internal/isp"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -280,4 +281,61 @@ func i18nErr(t *testing.T) i18n.Msg {
 	t.Helper()
 	_, err := Validate("192.168.1.1", IPv4)
 	return i18n.FromError(err)
+}
+
+type fakeISP struct {
+	info  map[string]isp.Info
+	calls int
+}
+
+func (f *fakeISP) Lookup(_ context.Context, a netip.Addr) (isp.Info, error) {
+	f.calls++
+	if i, ok := f.info[a.String()]; ok {
+		return i, nil
+	}
+	return isp.Info{}, isp.ErrNotFound
+}
+
+func TestTrackerISP(t *testing.T) {
+	ctx := context.Background()
+	obs := fakeObserver{IPv4: addrs("203.0.113.1", "203.0.113.1")}
+	lookup := &fakeISP{info: map[string]isp.Info{"203.0.113.1": {ASN: 64500, Name: "Example ISP"}}}
+	tr := NewTracker(obs, &memStore{}, discard())
+	tr.ISP = lookup
+	clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	tr.now = func() time.Time { return clock }
+
+	s, _ := tr.Check(ctx)
+	if s.IPv4.ISP == nil || s.IPv4.ISP.ASN != 64500 || s.IPv6.ISP != nil || lookup.calls != 1 {
+		t.Fatalf("erster Check: %+v / %d Abfragen", s.IPv4.ISP, lookup.calls)
+	}
+
+	// gleiche IP innerhalb der Gültigkeit → keine neue Abfrage
+	clock = clock.Add(time.Hour)
+	if s, _ = tr.Check(ctx); s.IPv4.ISP == nil || lookup.calls != 1 {
+		t.Fatalf("Cache: %+v / %d Abfragen", s.IPv4.ISP, lookup.calls)
+	}
+
+	// abgelaufen und Abfrage scheitert → altes Ergebnis bleibt
+	clock = clock.Add(ispTTL)
+	delete(lookup.info, "203.0.113.1")
+	if s, _ = tr.Check(ctx); s.IPv4.ISP == nil || lookup.calls != 2 {
+		t.Fatalf("Fehler bei gleicher IP: %+v / %d Abfragen", s.IPv4.ISP, lookup.calls)
+	}
+
+	// IP-Wechsel, Anbieter unbekannt → keine veraltete Anzeige
+	obs[IPv4] = addrs("203.0.113.2", "203.0.113.2")
+	if s, _ = tr.Check(ctx); s.IPv4.ISP != nil || lookup.calls != 3 {
+		t.Fatalf("Wechsel: %+v / %d Abfragen", s.IPv4.ISP, lookup.calls)
+	}
+
+	// erneuter Versuch erst nach ispRetryTTL
+	lookup.info["203.0.113.2"] = isp.Info{ASN: 64501}
+	if s, _ = tr.Check(ctx); s.IPv4.ISP != nil || lookup.calls != 3 {
+		t.Fatalf("zu früh erneut: %d Abfragen", lookup.calls)
+	}
+	clock = clock.Add(ispRetryTTL)
+	if s, _ = tr.Check(ctx); s.IPv4.ISP == nil || s.IPv4.ISP.ASN != 64501 {
+		t.Fatalf("nach Wartezeit: %+v", s.IPv4.ISP)
+	}
 }

@@ -9,6 +9,16 @@ export interface Observation {
   error?: string
 }
 
+/** Netz/Anbieter einer öffentlichen Adresse (Autonomes System). */
+export interface ISPInfo {
+  asn: number
+  name?: string
+  prefix?: string
+  country?: string
+  registry?: string
+  hostname?: string
+}
+
 export interface FamilyState {
   ip?: string
   since?: string
@@ -17,6 +27,7 @@ export interface FamilyState {
   votes: number
   responses: number
   sources: Observation[]
+  isp?: ISPInfo
 }
 
 export interface IPState {

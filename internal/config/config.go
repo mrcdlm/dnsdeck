@@ -28,6 +28,8 @@ type Config struct {
 	DNSCheckResolvers []dnscheck.Resolver
 	// DNSCheckAuthoritative: zusätzlich die Nameserver der Zone fragen.
 	DNSCheckAuthoritative bool
+	// ISPLookup: Anbieter (AS) der öffentlichen IPs per DNS ermitteln.
+	ISPLookup bool
 }
 
 // Load liest die Konfiguration über getenv (in Tests austauschbar).
@@ -70,6 +72,13 @@ func Load(getenv func(string) string) (*Config, error) {
 	default:
 		return nil, fmt.Errorf("invalid DNSCHECK_AUTHORITATIVE: %q (on|off)", v)
 	}
+	switch v := strings.ToLower(strings.TrimSpace(getenv("ISP_LOOKUP"))); v {
+	case "", "on":
+		c.ISPLookup = true
+	case "off":
+	default:
+		return nil, fmt.Errorf("invalid ISP_LOOKUP: %q (on|off)", v)
+	}
 	if c.AppPassword == "" {
 		return nil, errors.New("APP_PASSWORD must be set")
 	}
@@ -99,5 +108,6 @@ func (c *Config) LogValue() slog.Value {
 		slog.String("cf_api_base_url", c.CFAPIBaseURL),
 		slog.Int("dnscheck_resolvers", len(c.DNSCheckResolvers)),
 		slog.Bool("dnscheck_authoritative", c.DNSCheckAuthoritative),
+		slog.Bool("isp_lookup", c.ISPLookup),
 	)
 }

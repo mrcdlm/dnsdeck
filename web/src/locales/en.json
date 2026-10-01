@@ -77,6 +77,12 @@
     "notChecked": "Not checked yet",
     "refreshHint": "Check IP and sync all records",
     "loadError": "Could not load IP status: {{error}}",
+    "isp": {
+      "provider": "Provider",
+      "providerHint": "Network (autonomous system) the address belongs to",
+      "network": "Network {{prefix}}",
+      "hostname": "Reverse DNS"
+    },
     "status": {
       "ok": "Confirmed",
       "unconfirmed": "Unconfirmed",

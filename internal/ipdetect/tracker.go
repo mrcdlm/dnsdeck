@@ -10,6 +10,7 @@ import (
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
+	"github.com/mrcdlm/dnsdeck/internal/isp"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
@@ -32,6 +33,8 @@ type FamilyState struct {
 	Votes      int           `json:"votes"`
 	Responses  int           `json:"responses"`
 	Sources    []Observation `json:"sources"`
+	// ISP: Netz/Anbieter der bestätigten IP (fehlt, solange unbekannt).
+	ISP *isp.Info `json:"isp,omitempty"`
 }
 
 type State struct {
@@ -43,6 +46,21 @@ type State struct {
 type changeStore interface {
 	LatestIPChange(ctx context.Context, family string) (store.IPChange, error)
 	InsertIPChange(ctx context.Context, c store.IPChange) (int64, error)
+}
+
+type ispLookup interface {
+	Lookup(ctx context.Context, a netip.Addr) (isp.Info, error)
+}
+
+// Wie lange ein ISP-Ergebnis gilt, bevor es erneut abgefragt wird.
+const (
+	ispTTL      = 24 * time.Hour
+	ispRetryTTL = 15 * time.Minute
+)
+
+type ispEntry struct {
+	ip   string
+	next time.Time
 }
 
 type observer interface {
@@ -58,12 +76,15 @@ type Tracker struct {
 	pub   events.Publisher
 	// Notifier erhält IP-Wechsel (optional; nicht die erste Erkennung).
 	Notifier notify.Notifier
-	now      func() time.Time
+	// ISP ermittelt den Anbieter der bestätigten IPs (optional).
+	ISP ispLookup
+	now func() time.Time
 
 	checkMu sync.Mutex // serialisiert Prüfungen (Scheduler + manueller Button)
 	mu      sync.RWMutex
 	state   State
 	known   map[Family]netip.Addr
+	isp     map[Family]ispEntry
 }
 
 func NewTracker(obs observer, st changeStore, log *slog.Logger) *Tracker {
@@ -74,6 +95,7 @@ func NewTracker(obs observer, st changeStore, log *slog.Logger) *Tracker {
 			IPv6: FamilyState{Status: StatusPending, Sources: []Observation{}},
 		},
 		known: map[Family]netip.Addr{},
+		isp:   map[Family]ispEntry{},
 	}
 }
 
@@ -151,6 +173,8 @@ func (t *Tracker) Check(ctx context.Context) (State, error) {
 		}
 	}
 
+	t.refreshISP(ctx, now)
+
 	t.mu.Lock()
 	t.state.LastChecked = &now
 	t.mu.Unlock()
@@ -207,6 +231,7 @@ func (t *Tracker) apply(ctx context.Context, f Family, addrs []netip.Addr, obs [
 			fs.IP = d.IP.String()
 			since := now
 			fs.Since = &since
+			fs.ISP = nil // gehört zur alten IP
 		}
 	case d.Total == 0:
 		fs.Status, fs.MessageMsg = StatusUnavailable, d.Reason
@@ -218,6 +243,56 @@ func (t *Tracker) apply(ctx context.Context, f Family, addrs []netip.Addr, obs [
 		fs.Status, fs.MessageMsg = StatusUnconfirmed, i18n.M("ip.save_failed")
 	}
 	return persistErr
+}
+
+// refreshISP ermittelt den Anbieter der bekannten IPs, sofern für die IP noch
+// kein aktuelles Ergebnis vorliegt. Fehler sind nicht kritisch: Die Anzeige
+// fehlt dann, und es wird später erneut versucht.
+func (t *Tracker) refreshISP(ctx context.Context, now time.Time) {
+	if t.ISP == nil {
+		return
+	}
+	todo := map[Family]netip.Addr{}
+	t.mu.RLock()
+	for _, f := range Families {
+		ip := t.familyState(f).IP
+		e := t.isp[f]
+		if ip == "" || (e.ip == ip && now.Before(e.next)) {
+			continue
+		}
+		if a, err := netip.ParseAddr(ip); err == nil {
+			todo[f] = a
+		}
+	}
+	t.mu.RUnlock()
+
+	var wg sync.WaitGroup
+	for f, a := range todo {
+		wg.Go(func() {
+			info, err := t.ISP.Lookup(ctx, a)
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			fs := t.familyState(f)
+			if fs.IP != a.String() {
+				return
+			}
+			e := ispEntry{ip: fs.IP, next: now.Add(ispTTL)}
+			if err != nil {
+				e.next = now.Add(ispRetryTTL)
+				if t.isp[f].ip != fs.IP {
+					fs.ISP = nil
+				}
+				t.log.Debug("ISP nicht ermittelt", "family", f, "ip", fs.IP, "err", err)
+			} else {
+				if fs.ISP == nil || *fs.ISP != info {
+					t.log.Info("ISP ermittelt", "family", f, "ip", fs.IP, "asn", info.ASN, "name", info.Name)
+				}
+				fs.ISP = &info
+			}
+			t.isp[f] = e
+		})
+	}
+	wg.Wait()
 }
 
 // familyState liefert einen Zeiger auf den Zustand der Familie (mu gehalten).
