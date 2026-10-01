@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- The dashboard shows the internet provider of each public address: AS number and name,
+  country, network and reverse DNS name. Looked up via DNS at Team Cymru (no API key);
+  `ISP_LOOKUP=off` disables it.
+
 ## [0.2.1] – 2026-09-30
 
 ### Fixed

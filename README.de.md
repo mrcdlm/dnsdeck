@@ -24,6 +24,8 @@ eingebauter Weboberfläche und SQLite-Datenbank.
 - **Zuverlässige IP-Erkennung** – IPv4 und IPv6 über mehrere unabhängige Quellen; eine neue
   Adresse gilt erst, wenn die Mehrheit der Quellen übereinstimmt. Eine einzelne fehlerhafte
   Quelle löst so nie ein DNS-Update aus.
+- **Anbieter-Anzeige** – zu jeder öffentlichen Adresse zeigt das Dashboard den Internetanbieter
+  (Autonomes System mit Nummer, Land und Netz) sowie den Reverse-DNS-Namen.
 - **DynDNS für Cloudflare** – A- und AAAA-Einträge verwalten (Proxy-Status, TTL). Geändert
   wird nur, wenn der tatsächliche Stand bei Cloudflare abweicht; fehlende Einträge werden
   angelegt.
@@ -86,6 +88,7 @@ Intervalle, IP-Quellen und Webhooks werden in der Weboberfläche gepflegt.
 | `WEBHOOK_*` | nein | Geheimnisse für Webhooks, siehe [Benachrichtigungen](#benachrichtigungen) |
 | `DNSCHECK_RESOLVERS` | nein | Resolver für die Verbreitungsprüfung, kommagetrennt `[Name=]IP[:Port]`; leer = Standardliste, `off` = abgeschaltet, siehe [DNS-Verbreitung](#dns-verbreitung) |
 | `DNSCHECK_AUTHORITATIVE` | nein | `off` = autoritative Nameserver der Zone nicht abfragen (Standard `on`) |
+| `ISP_LOOKUP` | nein | `off` = Anbieter der öffentlichen IPs nicht ermitteln (Standard `on`), siehe [Funktionsweise](#funktionsweise) |
 | `LOG_LEVEL` | nein | `debug`, `info`, `warn` oder `error` (Standard `info`) |
 | `PORT`, `DATA_DIR` | nein | Port und Datenbankverzeichnis im Container (Standard `8080`, `/data`) |
 
@@ -108,6 +111,11 @@ Unter *Mein Profil → API-Token* ein benutzerdefiniertes Token mit diesen Recht
   Quellen parallel ab. Eine Adresse gilt, wenn sie eine gültige öffentliche Adresse ist und
   eine echte Mehrheit (mindestens zwei Quellen) übereinstimmt. Antwortet nur eine Quelle,
   wird ein Wechsel nicht übernommen (nur die allererste Erkennung).
+- **Anbieter:** Zur bestätigten Adresse fragt dnsdeck per DNS den
+  [IP-to-ASN-Dienst von Team Cymru](https://www.team-cymru.com/ip-asn-mapping) (Netz, AS-Nummer
+  und -Name, Land) sowie den Reverse-DNS-Namen ab – ohne API-Schlüssel, über den Resolver des
+  Containers. Das Ergebnis gilt 24 Stunden bzw. bis zum nächsten IP-Wechsel. Dabei wird die
+  eigene öffentliche Adresse an Team Cymru übermittelt; `ISP_LOOKUP=off` schaltet die Abfrage ab.
 - **DNS-Updates:** Für jeden Eintrag liest dnsdeck den aktuellen Stand bei Cloudflare und
   schreibt nur bei Abweichungen. Die IP wird immer durchgesetzt; bei Proxy-Status und TTL hat
   Cloudflare das letzte Wort – dnsdeck überträgt sie nur, wenn sie in dnsdeck geändert

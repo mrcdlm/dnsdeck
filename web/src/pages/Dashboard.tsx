@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, ChevronRight, Globe, ListTree, Network, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Building2, ChevronRight, Globe, ListTree, Network, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -9,12 +9,41 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { Family, FamilyState } from '@/lib/api'
-import { absoluteTime, relativeTime, useNow } from '@/lib/format'
+import type { Family, FamilyState, ISPInfo } from '@/lib/api'
+import { absoluteTime, countryName, relativeTime, useNow } from '@/lib/format'
 import { useIP, useIPHistory, useRecords, useRefreshIP, useTunnels } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 const familyLabel: Record<Family, string> = { ipv4: 'IPv4', ipv6: 'IPv6' }
+
+function ISPLine({ isp }: { isp: ISPInfo }) {
+  const { t } = useTranslation()
+  const details = [
+    `AS${isp.asn}`,
+    isp.country && countryName(isp.country),
+    isp.prefix && t('ip.isp.network', { prefix: isp.prefix }),
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <div className="flex min-w-0 items-start gap-2 text-sm" title={t('ip.isp.providerHint')}>
+      <Building2 className="text-muted-foreground mt-0.5 size-4 shrink-0" aria-hidden />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="font-medium break-words">
+          <span className="sr-only">{t('ip.isp.provider')}: </span>
+          {isp.name || `AS${isp.asn}`}
+        </span>
+        <span className="text-muted-foreground text-xs break-words">{details}</span>
+        {isp.hostname && (
+          <span className="text-muted-foreground font-mono text-xs break-all" title={t('ip.isp.hostname')}>
+            {isp.hostname}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function FamilyPanel({ family, state, now }: { family: Family; state: FamilyState; now: number }) {
   const { t } = useTranslation()
@@ -43,6 +72,8 @@ function FamilyPanel({ family, state, now }: { family: Family; state: FamilyStat
       ) : (
         <span className="text-muted-foreground text-2xl font-semibold">—</span>
       )}
+
+      {state.isp && <ISPLine isp={state.isp} />}
 
       <div className="text-muted-foreground flex flex-col gap-1 text-sm">
         {state.since && (

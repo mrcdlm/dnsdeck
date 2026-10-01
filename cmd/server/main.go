@@ -20,6 +20,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
+	"github.com/mrcdlm/dnsdeck/internal/isp"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
@@ -108,6 +109,9 @@ func run() error {
 	tracker := ipdetect.NewTracker(newDetector(settings.Get().IPSources), st, log)
 	tracker.SetPublisher(broker)
 	tracker.Notifier = dispatcher
+	if cfg.ISPLookup { // ISP_LOOKUP=off schaltet ab
+		tracker.ISP = isp.New()
+	}
 	if err := tracker.Load(ctx); err != nil {
 		return fmt.Errorf("load IP state: %w", err)
 	}

@@ -23,6 +23,8 @@ container (≈ 30 MB, amd64 and arm64) with an embedded web interface and an SQL
 - **Reliable IP detection** – IPv4 and IPv6 from several independent sources; a new address
   is only accepted when the majority of sources agree, so a single faulty source never
   triggers a DNS update.
+- **Provider display** – for each public address the dashboard shows your internet provider
+  (autonomous system with number, country and network) and the reverse DNS name.
 - **Dynamic DNS for Cloudflare** – manage A and AAAA records (proxy status, TTL). Records are
   only changed when the actual state at Cloudflare differs; missing records are created.
 - **DNS propagation status** – after every change dnsdeck asks public resolvers (Cloudflare,
@@ -83,6 +85,7 @@ intervals, IP sources and webhooks are managed in the web interface.
 | `WEBHOOK_*` | no | Secrets referenced by webhooks, see [Notifications](#notifications) |
 | `DNSCHECK_RESOLVERS` | no | Resolvers for the propagation check, comma-separated `[Name=]IP[:port]`; empty = default list, `off` = disabled, see [DNS propagation](#dns-propagation) |
 | `DNSCHECK_AUTHORITATIVE` | no | `off` = do not query the zone's authoritative name servers (default `on`) |
+| `ISP_LOOKUP` | no | `off` = do not look up the provider of the public IPs (default `on`), see [How it works](#how-it-works) |
 | `LOG_LEVEL` | no | `debug`, `info`, `warn` or `error` (default `info`) |
 | `PORT`, `DATA_DIR` | no | Port and database directory inside the container (default `8080`, `/data`) |
 
@@ -105,6 +108,11 @@ use *Client IP Address Filtering* – the token would lock itself out after your
   parallel. An address is accepted when it is a valid public address and a strict majority
   (at least two sources) agrees. If only one source answers, a change is not accepted
   (only the very first detection is).
+- **Provider:** for the confirmed address dnsdeck asks
+  [Team Cymru's IP-to-ASN service](https://www.team-cymru.com/ip-asn-mapping) via DNS (network,
+  AS number and name, country) and looks up the reverse DNS name – no API key, using the
+  container's resolver. The result is kept for 24 hours or until the next IP change. This sends
+  your public address to Team Cymru; `ISP_LOOKUP=off` disables the lookup.
 - **DNS updates:** for each record dnsdeck reads the current state from Cloudflare and only
   writes when something differs. The IP is always enforced; for proxy status and TTL the value
   at Cloudflare wins – dnsdeck only pushes them when you change them in dnsdeck. Existing

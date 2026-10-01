@@ -77,6 +77,12 @@
     "notChecked": "Noch nicht geprüft",
     "refreshHint": "IP prüfen und alle Records abgleichen",
     "loadError": "IP-Status konnte nicht geladen werden: {{error}}",
+    "isp": {
+      "provider": "Anbieter",
+      "providerHint": "Netz (Autonomes System), zu dem die Adresse gehört",
+      "network": "Netz {{prefix}}",
+      "hostname": "Reverse-DNS"
+    },
     "status": {
       "ok": "Bestätigt",
       "unconfirmed": "Unbestätigt",
