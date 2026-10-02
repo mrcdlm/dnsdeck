@@ -36,6 +36,8 @@ eingebauter Weboberfläche und SQLite-Datenbank.
   Client-Versionen und Uptime über 24 Stunden bzw. 7 Tage je Tunnel.
 - **Live-Dashboard** – aktualisiert sich sofort per Server-Sent Events, mobil nutzbar; heller
   und dunkler Modus nach Systemeinstellung; Deutsch und Englisch.
+- **Als App installierbar** – dnsdeck lässt sich auf den Startbildschirm des Handys legen oder
+  als Desktop-App installieren (PWA); die Oberfläche öffnet sich auch ohne Verbindung.
 - **Verlauf** – IP-Wechsel, DNS-Updates und Tunnel-Statuswechsel, filterbar.
 - **Benachrichtigungen per Webhook** – beliebig viele Webhooks mit eigener Methode, URL,
   eigenen Headern und Body-Template. Vorlagen für ntfy, Gotify, Discord, Slack, Telegram und
@@ -161,6 +163,15 @@ umgewandelt. Die Sprache der Benachrichtigungen ist eine eigene Einstellung unte
 
 Der Darstellungs-Button daneben wechselt zwischen **System** (Standard, folgt live dem
 Betriebssystem), **Hell** und **Dunkel**.
+
+### Als App installieren
+
+dnsdeck ist eine Progressive Web App: in Chrome/Edge über **App installieren** in der
+Adressleiste, unter Android über **Zum Startbildschirm hinzufügen**, in Safari unter iOS über
+**Teilen → Zum Home-Bildschirm**. dnsdeck öffnet sich dann in einem eigenen Fenster ohne
+Browserleisten. Browser bieten das nur über **HTTPS** an (z. B. hinter einem Reverse Proxy oder
+Cloudflare Tunnel) oder auf `localhost`. Offline zwischengespeichert wird nur die Oberfläche
+selbst – Daten aus `/api` legt der Service Worker nie ab.
 
 ## Benachrichtigungen
 

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The dashboard shows the internet provider of each public address: AS number and name,
   country, network and reverse DNS name. Looked up via DNS at Team Cymru (no API key);
   `ISP_LOOKUP=off` disables it.
+- Installable as an app (PWA): web app manifest, icons and a service worker. The interface
+  also opens offline; API data is never cached.
 
 ## [0.2.1] – 2026-09-30
 

@@ -278,7 +278,8 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "+
-				"connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+				"connect-src 'self'; manifest-src 'self'; worker-src 'self'; "+
+				"frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 		next.ServeHTTP(w, r)
 	})
 }

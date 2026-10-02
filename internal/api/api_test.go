@@ -272,6 +272,29 @@ func TestSPA(t *testing.T) {
 	}
 }
 
+func TestPWAFiles(t *testing.T) {
+	e := newTestEnv(t, fstest.MapFS{
+		"index.html":           {Data: []byte("<html>app</html>")},
+		"sw.js":                {Data: []byte("self.addEventListener('fetch', () => {})")},
+		"manifest.webmanifest": {Data: []byte(`{"name":"dnsdeck"}`)},
+	})
+
+	resp := e.do(t, "GET", "/sw.js", "", nil)
+	if resp.StatusCode != 200 || resp.Header.Get("Cache-Control") != "no-cache" {
+		t.Fatalf("sw.js: %d %q", resp.StatusCode, resp.Header.Get("Cache-Control"))
+	}
+	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "worker-src 'self'") ||
+		!strings.Contains(csp, "manifest-src 'self'") {
+		t.Fatalf("CSP: %q", csp)
+	}
+
+	resp = e.do(t, "GET", "/manifest.webmanifest", "", nil)
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Type") != "application/manifest+json" ||
+		resp.Header.Get("Cache-Control") != "no-cache" {
+		t.Fatalf("Manifest: %d %q %q", resp.StatusCode, resp.Header.Get("Content-Type"), resp.Header.Get("Cache-Control"))
+	}
+}
+
 func TestNotBuiltPage(t *testing.T) {
 	e := newTestEnv(t, nil)
 	resp := e.do(t, "GET", "/", "", nil)
