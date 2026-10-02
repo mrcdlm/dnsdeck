@@ -6,10 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] – 2026-10-02
+
 ### Added
-- The dashboard shows the internet provider of each public address: AS number and name,
-  country, network and reverse DNS name. Looked up via DNS at Team Cymru (no API key);
-  `ISP_LOOKUP=off` disables it.
 - Installable as an app (PWA): web app manifest, icons and a service worker. The interface
   also opens offline; API data is never cached.
 - Blocklist check: the public IPv4 is checked against DNS blocklists (Spamhaus ZEN, SpamCop,
@@ -21,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   after two failures in a row; TLS certificates are verified (expiry, host name, issuer) with a
   warning before they expire (default 14 days). New webhook events `site_down`,
   `site_recovered` and `cert_expiring`; check interval and warning period under **Settings**.
+
+## [0.2.2] – 2026-10-01
+
+### Added
+- The dashboard shows the internet provider of each public address: AS number and name,
+  country, network and reverse DNS name. Looked up via DNS at Team Cymru (no API key);
+  `ISP_LOOKUP=off` disables it.
 
 ## [0.2.1] – 2026-09-30
 
@@ -61,7 +67,9 @@ First public release.
   Home Assistant; secrets referenced from environment variables.
 - Single-container deployment (distroless, non-root, amd64 and arm64) published to ghcr.io.
 
-[Unreleased]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/mrcdlm/dnsdeck/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/mrcdlm/dnsdeck/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mrcdlm/dnsdeck/releases/tag/v0.1.0
