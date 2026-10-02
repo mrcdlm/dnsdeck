@@ -30,9 +30,16 @@ func spaHandler(static fs.FS) http.Handler {
 		name := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 		if name != "" && name != "index.html" {
 			if st, err := fs.Stat(static, name); err == nil && !st.IsDir() {
-				if strings.HasPrefix(name, "assets/") {
+				switch {
+				case strings.HasPrefix(name, "assets/"):
 					// Vite versieht Assets mit Content-Hash.
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				case name == "sw.js":
+					// Der Browser soll Updates des Service Workers sofort sehen.
+					w.Header().Set("Cache-Control", "no-cache")
+				case name == "manifest.webmanifest":
+					w.Header().Set("Cache-Control", "no-cache")
+					w.Header().Set("Content-Type", "application/manifest+json")
 				}
 				fileServer.ServeHTTP(w, r)
 				return

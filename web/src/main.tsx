@@ -27,6 +27,17 @@ const queryClient = new QueryClient({
   },
 })
 
+// Service Worker (installierbare App, Offline-Hülle) nur im Production-Build;
+// der Name des Haupt-Bundles enthält den Build-Hash und versioniert den Cache.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const build = new URL(import.meta.url).pathname.split('/').pop() ?? ''
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`/sw.js?build=${encodeURIComponent(build)}`).catch(() => {
+      // Ohne HTTPS (außer localhost) nicht verfügbar – die App läuft trotzdem.
+    })
+  })
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>

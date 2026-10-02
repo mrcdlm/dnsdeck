@@ -34,6 +34,8 @@ container (≈ 30 MB, amd64 and arm64) with an embedded web interface and an SQL
   versions and 24 h / 7 day uptime per tunnel.
 - **Live dashboard** – updates instantly via Server-Sent Events, works on mobile; light and
   dark mode following the system setting; English and German.
+- **Installable app** – add dnsdeck to your phone's home screen or install it as a desktop
+  app (PWA); the interface also opens without a connection.
 - **History** – IP changes, DNS updates and tunnel status changes, filterable.
 - **Notifications via webhooks** – any number of webhooks with custom method, URL, headers
   and body template. Templates included for ntfy, Gotify, Discord, Slack, Telegram and
@@ -154,6 +156,14 @@ notifications is a separate setting under **Settings** (default German).
 
 The theme button next to it switches between **System** (default, follows the operating
 system live), **Light** and **Dark**.
+
+### Install as an app
+
+dnsdeck is a progressive web app: in Chrome/Edge use **Install app** in the address bar, on
+Android **Add to home screen**, in Safari on iOS **Share → Add to Home Screen**. It then opens
+in its own window without browser bars. Browsers only offer this over **HTTPS** (e.g. behind a
+reverse proxy or a Cloudflare Tunnel) or on `localhost`. Only the interface itself is cached
+for offline use – data from `/api` is never stored by the service worker.
 
 ## Notifications
 
