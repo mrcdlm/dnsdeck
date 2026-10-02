@@ -5,9 +5,12 @@ import (
 	"errors"
 	"log/slog"
 	"net/netip"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/dnsbl"
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/isp"
@@ -35,6 +38,8 @@ type FamilyState struct {
 	Sources    []Observation `json:"sources"`
 	// ISP: Netz/Anbieter der bestätigten IP (fehlt, solange unbekannt).
 	ISP *isp.Info `json:"isp,omitempty"`
+	// Blocklist: Ergebnis der Sperrlisten-Prüfung (nur IPv4; fehlt, solange ungeprüft).
+	Blocklist *dnsbl.Result `json:"blocklist,omitempty"`
 }
 
 type State struct {
@@ -58,6 +63,17 @@ const (
 	ispRetryTTL = 15 * time.Minute
 )
 
+type blocklistChecker interface {
+	Check(ctx context.Context, a netip.Addr) dnsbl.Result
+}
+
+// Wie lange ein Sperrlisten-Ergebnis gilt bzw. wann nach einer ergebnislosen
+// Prüfung erneut gefragt wird.
+const (
+	blocklistTTL      = 24 * time.Hour
+	blocklistRetryTTL = time.Hour
+)
+
 type ispEntry struct {
 	ip   string
 	next time.Time
@@ -78,13 +94,16 @@ type Tracker struct {
 	Notifier notify.Notifier
 	// ISP ermittelt den Anbieter der bestätigten IPs (optional).
 	ISP ispLookup
-	now func() time.Time
+	// Blocklist prüft die bestätigte IPv4 gegen DNS-Sperrlisten (optional).
+	Blocklist blocklistChecker
+	now       func() time.Time
 
 	checkMu sync.Mutex // serialisiert Prüfungen (Scheduler + manueller Button)
 	mu      sync.RWMutex
 	state   State
 	known   map[Family]netip.Addr
 	isp     map[Family]ispEntry
+	bl      ispEntry // nur IPv4
 }
 
 func NewTracker(obs observer, st changeStore, log *slog.Logger) *Tracker {
@@ -173,7 +192,11 @@ func (t *Tracker) Check(ctx context.Context) (State, error) {
 		}
 	}
 
-	t.refreshISP(ctx, now)
+	// Anbieter und Sperrlisten unabhängig voneinander nachschlagen.
+	var lookups sync.WaitGroup
+	lookups.Go(func() { t.refreshISP(ctx, now) })
+	lookups.Go(func() { t.refreshBlocklist(ctx, now) })
+	lookups.Wait()
 
 	t.mu.Lock()
 	t.state.LastChecked = &now
@@ -232,6 +255,7 @@ func (t *Tracker) apply(ctx context.Context, f Family, addrs []netip.Addr, obs [
 			since := now
 			fs.Since = &since
 			fs.ISP = nil // gehört zur alten IP
+			fs.Blocklist = nil
 		}
 	case d.Total == 0:
 		fs.Status, fs.MessageMsg = StatusUnavailable, d.Reason
@@ -293,6 +317,65 @@ func (t *Tracker) refreshISP(ctx context.Context, now time.Time) {
 		})
 	}
 	wg.Wait()
+}
+
+// refreshBlocklist prüft die bekannte IPv4 gegen die Sperrlisten, sofern für
+// sie noch kein aktuelles Ergebnis vorliegt. Taucht eine Listung neu auf,
+// wird benachrichtigt (die PBL von Spamhaus zählt nicht als Listung).
+func (t *Tracker) refreshBlocklist(ctx context.Context, now time.Time) {
+	if t.Blocklist == nil {
+		return
+	}
+	t.mu.RLock()
+	ip, e := t.state.IPv4.IP, t.bl
+	t.mu.RUnlock()
+	if ip == "" || (e.ip == ip && now.Before(e.next)) {
+		return
+	}
+	a, err := netip.ParseAddr(ip)
+	if err != nil {
+		return
+	}
+
+	res := t.Blocklist.Check(ctx, a)
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	fs := &t.state.IPv4
+	if fs.IP != ip {
+		return
+	}
+	prev := fs.Blocklist
+	t.bl = ispEntry{ip: ip, next: now.Add(blocklistTTL)}
+	if res.Status == dnsbl.StatusUnknown {
+		t.bl.next = now.Add(blocklistRetryTTL)
+		if prev != nil {
+			// Kein Ergebnis (z. B. DNS gestört) – das letzte bleibt gültig.
+			t.log.Debug("Sperrlisten nicht prüfbar, letztes Ergebnis bleibt", "ip", ip)
+			return
+		}
+	}
+	fs.Blocklist = &res
+
+	var names, zones []string
+	for _, l := range res.Listed() {
+		if prev != nil && slices.ContainsFunc(prev.Listed(), func(p dnsbl.Entry) bool { return p.Zone == l.Zone }) {
+			continue
+		}
+		names = append(names, l.Name)
+		zones = append(zones, l.Zone)
+	}
+	if len(names) == 0 {
+		return
+	}
+	lists := strings.Join(names, ", ")
+	t.log.Warn("Öffentliche IP steht auf Sperrliste", "ip", ip, "lists", lists)
+	notify.Send(t.Notifier, notify.Event{
+		Type: notify.EventBlocklisted, Priority: notify.PriorityHigh, Time: now,
+		TitleMsg:   i18n.M("notify.blocklist.title"),
+		MessageMsg: i18n.M("notify.blocklist.message", "ip", ip, "lists", lists),
+		Data:       map[string]string{"ip": ip, "lists": lists, "zones": strings.Join(zones, ",")},
+	})
 }
 
 // familyState liefert einen Zeiger auf den Zustand der Familie (mu gehalten).

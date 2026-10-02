@@ -6,7 +6,7 @@ import type { NotifyEventType, Webhook, WebhookInput } from './api'
 export type PresetEnv = keyof (typeof de)['webhooks']['env']
 
 // Beschriftungen: events.<typ>.label / .hint (locales)
-export const eventTypes: NotifyEventType[] = ['ip_change', 'update_failed', 'update_recovered', 'tunnel_status']
+export const eventTypes: NotifyEventType[] = ['ip_change', 'update_failed', 'update_recovered', 'tunnel_status', 'blocklist_listed']
 
 export interface Preset {
   id: string

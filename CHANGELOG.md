@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ISP_LOOKUP=off` disables it.
 - Installable as an app (PWA): web app manifest, icons and a service worker. The interface
   also opens offline; API data is never cached.
+- Blocklist check: the public IPv4 is checked against DNS blocklists (Spamhaus ZEN, SpamCop,
+  PSBL, Mailspike) after every IP change and every 24 hours. The result is shown in the IP
+  card; new listings trigger the new webhook event `blocklist_listed`. Spamhaus PBL is shown as
+  information only. `DNSBL_LISTS` selects the lists or disables the check (`off`).
 
 ## [0.2.1] – 2026-09-30
 

@@ -347,6 +347,11 @@ func SampleEvent(eventType string) Event {
 			TitleMsg:   i18n.M("notify.tunnel.title", "name", "home", "to", i18n.Ref("tunnel.down")),
 			MessageMsg: i18n.M("notify.tunnel.message", "from", i18n.Ref("tunnel.healthy"), "to", i18n.Ref("tunnel.down")),
 			Data:       map[string]string{"tunnel": "home", "tunnel_id": "…", "from": "healthy", "to": "down"}}
+	case EventBlocklisted:
+		return Event{Type: eventType, Priority: PriorityHigh, Time: t,
+			TitleMsg:   i18n.M("notify.blocklist.title"),
+			MessageMsg: i18n.M("notify.blocklist.message", "ip", "203.0.113.2", "lists", "SpamCop"),
+			Data:       map[string]string{"ip": "203.0.113.2", "lists": "SpamCop", "zones": "bl.spamcop.net"}}
 	}
 	return Event{Type: EventTest, Priority: PriorityDefault, Time: time.Now().UTC(),
 		TitleMsg: i18n.M("notify.test.title"), MessageMsg: i18n.M("notify.test.message"), Data: map[string]string{}}

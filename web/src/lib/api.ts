@@ -19,6 +19,25 @@ export interface ISPInfo {
   hostname?: string
 }
 
+export type BlocklistStatus = 'clean' | 'listed' | 'policy' | 'refused' | 'error'
+
+/** Ergebnis einer Sperrliste (DNSBL). */
+export interface BlocklistEntry {
+  name: string
+  zone: string
+  status: BlocklistStatus
+  codes?: string[]
+  /** bekannte Teillisten, z. B. "SBL, XBL" (Spamhaus) */
+  detail?: string
+}
+
+/** Sperrlisten-Prüfung der öffentlichen IPv4. */
+export interface Blocklist {
+  checked_at: string
+  status: 'clean' | 'listed' | 'unknown'
+  lists: BlocklistEntry[]
+}
+
 export interface FamilyState {
   ip?: string
   since?: string
@@ -28,6 +47,7 @@ export interface FamilyState {
   responses: number
   sources: Observation[]
   isp?: ISPInfo
+  blocklist?: Blocklist
 }
 
 export interface IPState {
@@ -184,7 +204,7 @@ export interface TunnelChange {
   at: string
 }
 
-export type NotifyEventType = 'ip_change' | 'update_failed' | 'update_recovered' | 'tunnel_status'
+export type NotifyEventType = 'ip_change' | 'update_failed' | 'update_recovered' | 'tunnel_status' | 'blocklist_listed'| 'tunnel_status'
 
 export interface Settings {
   ip_check_interval_seconds: number

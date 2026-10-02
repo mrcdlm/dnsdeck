@@ -36,6 +36,8 @@ eingebauter Weboberfläche und SQLite-Datenbank.
   Client-Versionen und Uptime über 24 Stunden bzw. 7 Tage je Tunnel.
 - **Live-Dashboard** – aktualisiert sich sofort per Server-Sent Events, mobil nutzbar; heller
   und dunkler Modus nach Systemeinstellung; Deutsch und Englisch.
+- **Sperrlisten-Check** – zeigt, ob die öffentliche IPv4 auf einer Spam-Sperrliste steht
+  (Spamhaus, SpamCop u. a.), und meldet neue Listungen – nützlich für eigene Mailserver.
 - **Als App installierbar** – dnsdeck lässt sich auf den Startbildschirm des Handys legen oder
   als Desktop-App installieren (PWA); die Oberfläche öffnet sich auch ohne Verbindung.
 - **Verlauf** – IP-Wechsel, DNS-Updates und Tunnel-Statuswechsel, filterbar.
@@ -91,6 +93,7 @@ Intervalle, IP-Quellen und Webhooks werden in der Weboberfläche gepflegt.
 | `DNSCHECK_RESOLVERS` | nein | Resolver für die Verbreitungsprüfung, kommagetrennt `[Name=]IP[:Port]`; leer = Standardliste, `off` = abgeschaltet, siehe [DNS-Verbreitung](#dns-verbreitung) |
 | `DNSCHECK_AUTHORITATIVE` | nein | `off` = autoritative Nameserver der Zone nicht abfragen (Standard `on`) |
 | `ISP_LOOKUP` | nein | `off` = Anbieter der öffentlichen IPs nicht ermitteln (Standard `on`), siehe [Funktionsweise](#funktionsweise) |
+| `DNSBL_LISTS` | nein | Sperrlisten für die öffentliche IPv4, kommagetrennt `[Name=]Zone`; leer = Standardliste, `off` = abgeschaltet, siehe [Funktionsweise](#funktionsweise) |
 | `LOG_LEVEL` | nein | `debug`, `info`, `warn` oder `error` (Standard `info`) |
 | `PORT`, `DATA_DIR` | nein | Port und Datenbankverzeichnis im Container (Standard `8080`, `/data`) |
 
@@ -118,6 +121,13 @@ Unter *Mein Profil → API-Token* ein benutzerdefiniertes Token mit diesen Recht
   und -Name, Land) sowie den Reverse-DNS-Namen ab – ohne API-Schlüssel, über den Resolver des
   Containers. Das Ergebnis gilt 24 Stunden bzw. bis zum nächsten IP-Wechsel. Dabei wird die
   eigene öffentliche Adresse an Team Cymru übermittelt; `ISP_LOOKUP=off` schaltet die Abfrage ab.
+- **Sperrlisten:** Die bestätigte IPv4 wird gegen DNS-Sperrlisten geprüft, die Mailserver vor der
+  Annahme von E-Mails abfragen: Spamhaus ZEN, SpamCop, PSBL und Mailspike. Relevant ist das für
+  einen eigenen Mailserver. Die *PBL* von Spamhaus führt fast jeden privaten Anschluss und wird
+  als Hinweis angezeigt, nicht als Listung. Spamhaus lehnt Abfragen über öffentliche Resolver wie
+  1.1.1.1 oder 8.8.8.8 ab – das Ergebnis lautet dann „nicht prüfbar“; der Container sollte den
+  Resolver des Routers oder Providers nutzen. Geprüft wird nach jedem IP-Wechsel und alle
+  24 Stunden; `DNSBL_LISTS=off` schaltet die Prüfung ab.
 - **DNS-Updates:** Für jeden Eintrag liest dnsdeck den aktuellen Stand bei Cloudflare und
   schreibt nur bei Abweichungen. Die IP wird immer durchgesetzt; bei Proxy-Status und TTL hat
   Cloudflare das letzte Wort – dnsdeck überträgt sie nur, wenn sie in dnsdeck geändert
@@ -182,6 +192,7 @@ Webhook hat eigene Methode, URL, Header, ein Body-Template und eine eigene Ereig
 - DNS-Update fehlgeschlagen (einmal je neuem Fehler, nicht bei jeder Wiederholung)
 - DNS-Update wieder erfolgreich
 - Tunnel-Status geändert
+- Öffentliche IPv4 neu auf einer Sperrliste (`.Data.ip`, `.Data.lists`, `.Data.zones`)
 
 Der Body ist ein Go-[`text/template`](https://pkg.go.dev/text/template) mit den Feldern
 `.Type`, `.Title`, `.Message`, `.Priority`, `.Time` und `.Data.<feld>` sowie den Funktionen

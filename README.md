@@ -34,6 +34,8 @@ container (≈ 30 MB, amd64 and arm64) with an embedded web interface and an SQL
   versions and 24 h / 7 day uptime per tunnel.
 - **Live dashboard** – updates instantly via Server-Sent Events, works on mobile; light and
   dark mode following the system setting; English and German.
+- **Blocklist check** – shows whether your public IPv4 is on a spam blocklist (Spamhaus,
+  SpamCop and others) and notifies you of new listings – useful for self-hosted mail.
 - **Installable app** – add dnsdeck to your phone's home screen or install it as a desktop
   app (PWA); the interface also opens without a connection.
 - **History** – IP changes, DNS updates and tunnel status changes, filterable.
@@ -88,6 +90,7 @@ intervals, IP sources and webhooks are managed in the web interface.
 | `DNSCHECK_RESOLVERS` | no | Resolvers for the propagation check, comma-separated `[Name=]IP[:port]`; empty = default list, `off` = disabled, see [DNS propagation](#dns-propagation) |
 | `DNSCHECK_AUTHORITATIVE` | no | `off` = do not query the zone's authoritative name servers (default `on`) |
 | `ISP_LOOKUP` | no | `off` = do not look up the provider of the public IPs (default `on`), see [How it works](#how-it-works) |
+| `DNSBL_LISTS` | no | Blocklists for the public IPv4, comma-separated `[Name=]zone`; empty = default list, `off` = disabled, see [How it works](#how-it-works) |
 | `LOG_LEVEL` | no | `debug`, `info`, `warn` or `error` (default `info`) |
 | `PORT`, `DATA_DIR` | no | Port and database directory inside the container (default `8080`, `/data`) |
 
@@ -115,6 +118,13 @@ use *Client IP Address Filtering* – the token would lock itself out after your
   AS number and name, country) and looks up the reverse DNS name – no API key, using the
   container's resolver. The result is kept for 24 hours or until the next IP change. This sends
   your public address to Team Cymru; `ISP_LOOKUP=off` disables the lookup.
+- **Blocklists:** the confirmed IPv4 is checked against DNS blocklists that mail servers consult
+  before accepting email: Spamhaus ZEN, SpamCop, PSBL and Mailspike. This matters if you run
+  your own mail server. Spamhaus *PBL* lists almost every residential connection and is shown
+  as information, not as a listing. Spamhaus refuses queries sent through public resolvers such
+  as 1.1.1.1 or 8.8.8.8 – the result is then “could not be checked”; let the container use your
+  router's or provider's resolver. Checked again after every IP change and every 24 hours;
+  `DNSBL_LISTS=off` disables it.
 - **DNS updates:** for each record dnsdeck reads the current state from Cloudflare and only
   writes when something differs. The IP is always enforced; for proxy status and TTL the value
   at Cloudflare wins – dnsdeck only pushes them when you change them in dnsdeck. Existing
@@ -174,6 +184,7 @@ own method, URL, headers, body template and event selection:
 - DNS update failed (once per new error, not on every retry)
 - DNS update recovered
 - Tunnel status changed
+- Public IPv4 newly found on a blocklist (`.Data.ip`, `.Data.lists`, `.Data.zones`)
 
 The body is a Go [`text/template`](https://pkg.go.dev/text/template) with the fields
 `.Type`, `.Title`, `.Message`, `.Priority`, `.Time` and `.Data.<field>`, and the functions

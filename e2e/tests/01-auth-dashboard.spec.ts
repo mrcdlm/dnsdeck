@@ -64,3 +64,16 @@ test('Dashboard mobil ohne Überlauf', async ({ page }) => {
   await expect(page.getByText('Öffentliche IP')).toBeVisible()
   await expectNoHorizontalOverflow(page)
 })
+
+test('Dashboard: Sperrlisten-Prüfung der IPv4', async ({ page }) => {
+  await login(page)
+  // Echte Abfrage – das Ergebnis hängt von der IP der Testumgebung ab.
+  const summary = page.locator('summary').filter({ hasText: /Sperrliste|Sperrlisten nicht prüfbar/ })
+  await expect(summary).toBeVisible({ timeout: 20_000 })
+  await summary.click()
+  await expect(page.getByText('Spamhaus ZEN:')).toBeVisible()
+  await expect(page.getByText(/^Geprüft /)).toBeVisible()
+
+  const ip = (await api<{ ipv4: { blocklist?: { lists: unknown[] } } }>(page, 'GET', '/api/ip')).json
+  expect(ip.ipv4.blocklist?.lists).toHaveLength(4)
+})
