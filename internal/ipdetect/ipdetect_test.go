@@ -8,11 +8,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/mrcdlm/dnsdeck/internal/dnsbl"
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/isp"
+	"github.com/mrcdlm/dnsdeck/internal/notify"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
 
@@ -337,5 +341,92 @@ func TestTrackerISP(t *testing.T) {
 	clock = clock.Add(ispRetryTTL)
 	if s, _ = tr.Check(ctx); s.IPv4.ISP == nil || s.IPv4.ISP.ASN != 64501 {
 		t.Fatalf("nach Wartezeit: %+v", s.IPv4.ISP)
+	}
+}
+
+type fakeBlocklist struct {
+	listed map[string][]string // IP → gelistete Zonen
+	down   bool                // keine Liste erreichbar
+	calls  int
+}
+
+func (f *fakeBlocklist) Check(_ context.Context, a netip.Addr) dnsbl.Result {
+	f.calls++
+	if f.down {
+		return dnsbl.Result{Status: dnsbl.StatusUnknown, Lists: []dnsbl.Entry{{Zone: "a.example", Status: dnsbl.StatusError}}}
+	}
+	res := dnsbl.Result{Status: dnsbl.StatusClean}
+	for _, z := range []string{"a.example", "b.example"} {
+		e := dnsbl.Entry{Name: strings.ToUpper(z[:1]), Zone: z, Status: dnsbl.StatusClean}
+		if slices.Contains(f.listed[a.String()], z) {
+			e.Status, res.Status = dnsbl.StatusListed, dnsbl.StatusListed
+		}
+		res.Lists = append(res.Lists, e)
+	}
+	return res
+}
+
+type eventLog []notify.Event
+
+func (l *eventLog) Notify(ev notify.Event) { *l = append(*l, ev) }
+
+func TestTrackerBlocklist(t *testing.T) {
+	ctx := context.Background()
+	obs := fakeObserver{IPv4: addrs("203.0.113.1", "203.0.113.1"), IPv6: addrs("2001:db8::1", "2001:db8::1")}
+	bl := &fakeBlocklist{listed: map[string][]string{}}
+	var evs eventLog
+	tr := NewTracker(obs, &memStore{}, discard())
+	tr.Blocklist, tr.Notifier = bl, &evs
+	clock := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	tr.now = func() time.Time { return clock }
+
+	s, _ := tr.Check(ctx)
+	if s.IPv4.Blocklist == nil || s.IPv4.Blocklist.Status != dnsbl.StatusClean || s.IPv6.Blocklist != nil ||
+		bl.calls != 1 || len(evs) != 0 {
+		t.Fatalf("erster Check: %+v / %d Abfragen / %d Ereignisse", s.IPv4.Blocklist, bl.calls, len(evs))
+	}
+
+	// innerhalb der Gültigkeit keine neue Abfrage
+	clock = clock.Add(time.Hour)
+	if tr.Check(ctx); bl.calls != 1 {
+		t.Fatalf("Cache: %d Abfragen", bl.calls)
+	}
+
+	// nach Ablauf neu gelistet → genau eine Benachrichtigung
+	clock = clock.Add(blocklistTTL)
+	bl.listed["203.0.113.1"] = []string{"b.example"}
+	s, _ = tr.Check(ctx)
+	if s.IPv4.Blocklist.Status != dnsbl.StatusListed || len(evs) != 1 ||
+		evs[0].Type != notify.EventBlocklisted || evs[0].Data["zones"] != "b.example" || evs[0].Data["lists"] != "B" {
+		t.Fatalf("Listung: %+v / %+v", s.IPv4.Blocklist, evs)
+	}
+
+	// weiterhin gelistet → keine erneute Meldung; zusätzliche Liste → nur diese
+	clock = clock.Add(blocklistTTL)
+	tr.Check(ctx)
+	bl.listed["203.0.113.1"] = []string{"a.example", "b.example"}
+	clock = clock.Add(blocklistTTL)
+	tr.Check(ctx)
+	if len(evs) != 2 || evs[1].Data["zones"] != "a.example" {
+		t.Fatalf("Folgemeldungen: %+v", evs)
+	}
+
+	// Listen nicht erreichbar → letztes Ergebnis bleibt, früher erneut versuchen
+	bl.down = true
+	clock = clock.Add(blocklistTTL)
+	if s, _ = tr.Check(ctx); s.IPv4.Blocklist.Status != dnsbl.StatusListed {
+		t.Fatalf("Ausfall: %+v", s.IPv4.Blocklist)
+	}
+	calls := bl.calls
+	clock = clock.Add(blocklistRetryTTL)
+	if tr.Check(ctx); bl.calls != calls+1 {
+		t.Fatalf("Wiederholung: %d → %d", calls, bl.calls)
+	}
+
+	// IP-Wechsel → sofort neu prüfen, neue IP sauber
+	bl.down = false
+	obs[IPv4] = addrs("203.0.113.2", "203.0.113.2")
+	if s, _ = tr.Check(ctx); s.IPv4.Blocklist == nil || s.IPv4.Blocklist.Status != dnsbl.StatusClean {
+		t.Fatalf("Wechsel: %+v", s.IPv4.Blocklist)
 	}
 }

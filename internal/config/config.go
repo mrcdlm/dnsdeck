@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mrcdlm/dnsdeck/internal/dnsbl"
 	"github.com/mrcdlm/dnsdeck/internal/dnscheck"
 )
 
@@ -30,6 +31,8 @@ type Config struct {
 	DNSCheckAuthoritative bool
 	// ISPLookup: Anbieter (AS) der öffentlichen IPs per DNS ermitteln.
 	ISPLookup bool
+	// DNSBLLists: Sperrlisten für die öffentliche IPv4 (nil = aus).
+	DNSBLLists []dnsbl.List
 }
 
 // Load liest die Konfiguration über getenv (in Tests austauschbar).
@@ -79,6 +82,9 @@ func Load(getenv func(string) string) (*Config, error) {
 	default:
 		return nil, fmt.Errorf("invalid ISP_LOOKUP: %q (on|off)", v)
 	}
+	if c.DNSBLLists, err = dnsbl.ParseLists(getenv("DNSBL_LISTS")); err != nil {
+		return nil, err
+	}
 	if c.AppPassword == "" {
 		return nil, errors.New("APP_PASSWORD must be set")
 	}
@@ -109,5 +115,6 @@ func (c *Config) LogValue() slog.Value {
 		slog.Int("dnscheck_resolvers", len(c.DNSCheckResolvers)),
 		slog.Bool("dnscheck_authoritative", c.DNSCheckAuthoritative),
 		slog.Bool("isp_lookup", c.ISPLookup),
+		slog.Int("dnsbl_lists", len(c.DNSBLLists)),
 	)
 }

@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/mrcdlm/dnsdeck/internal/dnsbl"
 )
 
 func env(m map[string]string) func(string) string {
@@ -75,6 +77,19 @@ func TestLoadDNSCheck(t *testing.T) {
 		if _, err := Load(env(m)); err == nil {
 			t.Errorf("%v: expected error", m)
 		}
+	}
+}
+
+func TestLoadDNSBLLists(t *testing.T) {
+	c, err := Load(env(map[string]string{"APP_PASSWORD": "x"}))
+	if err != nil || len(c.DNSBLLists) != len(dnsbl.DefaultLists) {
+		t.Fatalf("Standard: %v %v", c, err)
+	}
+	if c, err = Load(env(map[string]string{"APP_PASSWORD": "x", "DNSBL_LISTS": "off"})); err != nil || c.DNSBLLists != nil {
+		t.Fatalf("off: %v %v", c, err)
+	}
+	if _, err := Load(env(map[string]string{"APP_PASSWORD": "x", "DNSBL_LISTS": "kein zone"})); err == nil {
+		t.Error("expected error")
 	}
 }
 

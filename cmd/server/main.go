@@ -16,6 +16,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/api"
 	"github.com/mrcdlm/dnsdeck/internal/config"
 	"github.com/mrcdlm/dnsdeck/internal/ddns"
+	"github.com/mrcdlm/dnsdeck/internal/dnsbl"
 	"github.com/mrcdlm/dnsdeck/internal/dnscheck"
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
@@ -111,6 +112,9 @@ func run() error {
 	tracker.Notifier = dispatcher
 	if cfg.ISPLookup { // ISP_LOOKUP=off schaltet ab
 		tracker.ISP = isp.New()
+	}
+	if cfg.DNSBLLists != nil { // DNSBL_LISTS=off schaltet ab
+		tracker.Blocklist = dnsbl.New(cfg.DNSBLLists)
 	}
 	if err := tracker.Load(ctx); err != nil {
 		return fmt.Errorf("load IP state: %w", err)

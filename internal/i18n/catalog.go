@@ -118,6 +118,8 @@ var catalog = map[string]entry{
 	"notify.update_recovered.message": {"{name} zeigt auf {ip}.", "{name} points to {ip}."},
 	"notify.tunnel.title":             {"Tunnel {name}: {to}", "Tunnel {name}: {to}"},
 	"notify.tunnel.message":           {"Status {from} → {to}", "Status {from} → {to}"},
+	"notify.blocklist.title":          {"Öffentliche IP auf Sperrliste", "Public IP on a blocklist"},
+	"notify.blocklist.message":        {"{ip} steht auf: {lists}", "{ip} is listed on: {lists}"},
 	"notify.test.title":               {"dnsdeck: Testnachricht", "dnsdeck: test message"},
 	"notify.test.message":             {"Benachrichtigungen funktionieren.", "Notifications are working."},
 }

@@ -83,6 +83,21 @@
       "network": "Network {{prefix}}",
       "hostname": "Reverse DNS"
     },
+    "blocklist": {
+      "clean": "Not on any blocklist",
+      "listed": "On blocklist: {{lists}}",
+      "unknown": "Blocklists could not be checked",
+      "entry": {
+        "clean": "not listed",
+        "listed": "listed",
+        "policy": "end-user connection (PBL)",
+        "refused": "query refused",
+        "error": "unreachable"
+      },
+      "policyHint": "Spamhaus PBL lists almost all residential connections. This is normal and only matters for your own mail server – it should send through a relay.",
+      "refusedHint": "Spamhaus does not answer queries via public resolvers (e.g. 1.1.1.1, 8.8.8.8). Let the container use your router's or provider's resolver.",
+      "checked": "Checked {{relative}}"
+    },
     "status": {
       "ok": "Confirmed",
       "unconfirmed": "Unconfirmed",
@@ -300,6 +315,10 @@
     "tunnel_status": {
       "label": "Tunnel status change",
       "hint": "e.g. connected → disconnected."
+    },
+    "blocklist_listed": {
+      "label": "IP on blocklist",
+      "hint": "The public IPv4 was newly found on a DNS blocklist (e.g. Spamhaus) – relevant for your own mail server."
     }
   },
   "webhooks": {

@@ -1,4 +1,16 @@
-import { AlertTriangle, ArrowLeft, Building2, ChevronRight, Globe, ListTree, Network, RefreshCw } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Building2,
+  ChevronRight,
+  Globe,
+  ListTree,
+  Network,
+  RefreshCw,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldQuestion,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
@@ -9,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { Family, FamilyState, ISPInfo } from '@/lib/api'
+import type { Blocklist, BlocklistStatus, Family, FamilyState, ISPInfo } from '@/lib/api'
 import { absoluteTime, countryName, relativeTime, useNow } from '@/lib/format'
 import { useIP, useIPHistory, useRecords, useRefreshIP, useTunnels } from '@/lib/queries'
 import { cn } from '@/lib/utils'
@@ -45,6 +57,57 @@ function ISPLine({ isp }: { isp: ISPInfo }) {
   )
 }
 
+const blocklistIcon = { clean: ShieldCheck, listed: ShieldAlert, unknown: ShieldQuestion }
+const blocklistColor = { clean: 'text-success', listed: 'text-destructive', unknown: 'text-muted-foreground' }
+const entryColor: Record<BlocklistStatus, string> = {
+  clean: 'text-success',
+  policy: 'text-muted-foreground',
+  listed: 'text-destructive',
+  refused: 'text-warning',
+  error: 'text-warning',
+}
+
+function BlocklistLine({ blocklist, now }: { blocklist: Blocklist; now: number }) {
+  const { t } = useTranslation()
+  const Icon = blocklistIcon[blocklist.status]
+  const listed = blocklist.lists.filter((l) => l.status === 'listed')
+  const summary =
+    blocklist.status === 'listed'
+      ? t('ip.blocklist.listed', { lists: listed.map((l) => l.name).join(', ') })
+      : t(`ip.blocklist.${blocklist.status}`)
+
+  return (
+    <div className="flex min-w-0 items-start gap-2 text-sm">
+      <Icon className={cn('mt-0.5 size-4 shrink-0', blocklistColor[blocklist.status])} aria-hidden />
+      <details className="min-w-0">
+        <summary
+          className={cn('cursor-pointer font-medium select-none', blocklist.status === 'listed' && 'text-destructive')}
+        >
+          {summary}
+        </summary>
+        <ul className="text-muted-foreground mt-1 flex flex-col gap-0.5 text-xs">
+          {blocklist.lists.map((l) => (
+            <li key={l.zone} className="break-words" title={l.zone}>
+              <span className="font-medium">{l.name}:</span>{' '}
+              <span className={entryColor[l.status]}>{t(`ip.blocklist.entry.${l.status}`)}</span>
+              {l.detail && l.status === 'listed' && ` (${l.detail})`}
+            </li>
+          ))}
+        </ul>
+        {blocklist.lists.some((l) => l.status === 'policy') && (
+          <p className="text-muted-foreground mt-1 text-xs">{t('ip.blocklist.policyHint')}</p>
+        )}
+        {blocklist.lists.some((l) => l.status === 'refused') && (
+          <p className="text-muted-foreground mt-1 text-xs">{t('ip.blocklist.refusedHint')}</p>
+        )}
+        <p className="text-muted-foreground mt-1 text-xs" title={absoluteTime(blocklist.checked_at)}>
+          {t('ip.blocklist.checked', { relative: relativeTime(blocklist.checked_at, now) })}
+        </p>
+      </details>
+    </div>
+  )
+}
+
 function FamilyPanel({ family, state, now }: { family: Family; state: FamilyState; now: number }) {
   const { t } = useTranslation()
   const label = familyLabel[family]
@@ -74,6 +137,7 @@ function FamilyPanel({ family, state, now }: { family: Family; state: FamilyStat
       )}
 
       {state.isp && <ISPLine isp={state.isp} />}
+      {state.blocklist && <BlocklistLine blocklist={state.blocklist} now={now} />}
 
       <div className="text-muted-foreground flex flex-col gap-1 text-sm">
         {state.since && (

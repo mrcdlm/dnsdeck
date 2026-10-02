@@ -83,6 +83,21 @@
       "network": "Netz {{prefix}}",
       "hostname": "Reverse-DNS"
     },
+    "blocklist": {
+      "clean": "Auf keiner Sperrliste",
+      "listed": "Auf Sperrliste: {{lists}}",
+      "unknown": "Sperrlisten nicht prüfbar",
+      "entry": {
+        "clean": "nicht gelistet",
+        "listed": "gelistet",
+        "policy": "Endkundenanschluss (PBL)",
+        "refused": "Abfrage abgelehnt",
+        "error": "nicht erreichbar"
+      },
+      "policyHint": "Die PBL von Spamhaus führt fast alle privaten Anschlüsse. Das ist normal und nur für eigene Mailserver relevant – sie sollten über einen Relay-Server versenden.",
+      "refusedHint": "Spamhaus beantwortet keine Abfragen über öffentliche Resolver (z. B. 1.1.1.1, 8.8.8.8). Den Container den Resolver des Routers oder Providers nutzen lassen.",
+      "checked": "Geprüft {{relative}}"
+    },
     "status": {
       "ok": "Bestätigt",
       "unconfirmed": "Unbestätigt",
@@ -300,6 +315,10 @@
     "tunnel_status": {
       "label": "Tunnel-Statuswechsel",
       "hint": "z. B. verbunden → getrennt."
+    },
+    "blocklist_listed": {
+      "label": "IP auf Sperrliste",
+      "hint": "Die öffentliche IPv4 wurde neu auf einer DNS-Sperrliste gefunden (z. B. Spamhaus) – relevant für eigene Mailserver."
     }
   },
   "webhooks": {
