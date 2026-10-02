@@ -51,6 +51,8 @@ import { webhookInput } from '@/lib/webhooks'
 
 const ipIntervals = [60, 120, 300, 600, 900, 1800, 3600]
 const tunnelIntervals = [30, 60, 120, 300, 600]
+const probeIntervals = [60, 120, 300, 600, 900, 1800, 3600]
+const warnDayOptions = [7, 14, 21, 30, 60]
 
 const sourceInfo: Record<string, string> = {
   cloudflare: 'Cloudflare (1.1.1.1/cdn-cgi/trace)',
@@ -186,6 +188,34 @@ function SettingsForm({
             presets={tunnelIntervals}
             onChange={(v) => update({ tunnel_interval_seconds: v })}
           />
+        </SettingRow>
+        <SettingRow id="probe-interval" label={t('settings.probeInterval')} hint={t('settings.probeIntervalHint')}>
+          <IntervalSelect
+            id="probe-interval"
+            value={draft.probe_interval_seconds}
+            presets={probeIntervals}
+            onChange={(v) => update({ probe_interval_seconds: v })}
+          />
+        </SettingRow>
+        <SettingRow id="tls-warn-days" label={t('settings.tlsWarnDays')} hint={t('settings.tlsWarnDaysHint')}>
+          <Select
+            value={String(draft.tls_warn_days)}
+            onValueChange={(v) => update({ tls_warn_days: Number(v) })}
+          >
+            <SelectTrigger id="tls-warn-days" className="w-full sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(warnDayOptions.includes(draft.tls_warn_days)
+                ? warnDayOptions
+                : [...warnDayOptions, draft.tls_warn_days].sort((a, b) => a - b)
+              ).map((d) => (
+                <SelectItem key={d} value={String(d)}>
+                  {t('settings.days', { count: d })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </SettingRow>
       </Section>
 

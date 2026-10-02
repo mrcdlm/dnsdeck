@@ -14,7 +14,8 @@
     "records": "Records",
     "tunnels": "Tunnels",
     "history": "History",
-    "settings": "Settings"
+    "settings": "Settings",
+    "checks": "Reachability"
   },
   "live": {
     "on": "Live",
@@ -125,7 +126,12 @@
     "degraded": "{{count}} degraded",
     "down": "{{count}} disconnected/inactive",
     "dnsUpdates": "Recent DNS updates",
-    "dnsUpdatesHint": "Changes to the managed records"
+    "dnsUpdatesHint": "Changes to the managed records",
+    "checks": "Reachability",
+    "noChecks": "No checks",
+    "reachable": "{{count}} reachable",
+    "certExpiring": "{{count}} certificate expiring",
+    "problems": "{{count}} failing"
   },
   "record": {
     "status": {
@@ -183,7 +189,8 @@
     "logTitle": "Update log",
     "logHint": "Created and changed records as well as errors",
     "removeTitle": "Stop managing record?",
-    "removeHint": "<name>{{name}}</name> will be removed from dnsdeck and no longer updated. The record at Cloudflare stays unchanged."
+    "removeHint": "<name>{{name}}</name> will be removed from dnsdeck and no longer updated. The record at Cloudflare stays unchanged.",
+    "probeLabel": "Reachability: {{status}}"
   },
   "recordDialog": {
     "addTitle": "Add record",
@@ -201,7 +208,9 @@
     "proxied": "Proxy through Cloudflare",
     "proxiedHint": "Orange cloud: traffic goes through Cloudflare, the TTL is then automatic.",
     "enabled": "Update automatically",
-    "enabledHint": "Disabled: the record stays managed but is not changed."
+    "enabledHint": "Disabled: the record stays managed but is not changed.",
+    "probe": "Check reachability",
+    "probeHint": "Requests {{url}} regularly and monitors its certificate."
   },
   "tunnel": {
     "status": {
@@ -297,7 +306,13 @@
     "notifyLanguage": "Notification language",
     "notifyLanguageHint": "Independent of the interface language, which each browser chooses itself.",
     "saved": "Saved",
-    "discard": "Discard"
+    "discard": "Discard",
+    "probeInterval": "Check reachability",
+    "probeIntervalHint": "An outage is reported after two failures in a row.",
+    "tlsWarnDays": "Warn before certificates expire",
+    "tlsWarnDaysHint": "Remaining validity at which a certificate counts as “expiring” and is reported.",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days"
   },
   "events": {
     "ip_change": {
@@ -319,6 +334,18 @@
     "blocklist_listed": {
       "label": "IP on blocklist",
       "hint": "The public IPv4 was newly found on a DNS blocklist (e.g. Spamhaus) – relevant for your own mail server."
+    },
+    "site_down": {
+      "label": "Unreachable",
+      "hint": "A checked address stopped responding or its certificate is invalid."
+    },
+    "site_recovered": {
+      "label": "Reachable again",
+      "hint": "A previously failing address responds again."
+    },
+    "cert_expiring": {
+      "label": "Certificate expiring",
+      "hint": "Once per certificate when the configured remaining validity is reached."
     }
   },
   "webhooks": {
@@ -421,5 +448,42 @@
     "watching": "repeating automatically",
     "checkNow": "Check now",
     "disabled": "DNS propagation check disabled (DNSCHECK_RESOLVERS=off)"
+  },
+  "checks": {
+    "subtitle": "Are your services responding, and how long are their certificates valid?",
+    "url": "Address",
+    "add": "Add check",
+    "loadError": "Checks could not be loaded: {{error}}",
+    "empty": "No checks yet. Enter an address above or turn on “Check reachability” for a record.",
+    "fromRecord": "from record",
+    "noTLS": "no TLS",
+    "certExpired": "expired",
+    "certDays_one": "{{count}} day left",
+    "certDays_other": "{{count}} days left",
+    "enable": "Turn check on",
+    "disable": "Pause check",
+    "enabledLabel": "Check {{url}}",
+    "run": "Check now",
+    "runLabel": "Check {{url}} now",
+    "removeLabel": "Remove {{url}}",
+    "removeTitle": "Remove check?",
+    "removeHint": "<url>{{url}}</url> will no longer be checked.",
+    "removeRecordHint": "<url>{{url}}</url> will no longer be checked. The record itself is kept.",
+    "howItWorks": "dnsdeck requests each address with GET and does not follow redirects. Any response below 500 counts as reachable – a login page too. Certificates are reported {{days}} days before they expire.",
+    "hairpin": "Checks run from inside the container. Addresses not routed through Cloudflare are sometimes unreachable from your own network although they work from outside (missing NAT loopback on the router).",
+    "col": {
+      "url": "Address",
+      "status": "Status",
+      "response": "Response",
+      "certificate": "Certificate"
+    },
+    "status": {
+      "pending": "Pending",
+      "up": "Reachable",
+      "expiring": "Certificate expiring",
+      "tls_error": "Certificate invalid",
+      "down": "Unreachable",
+      "paused": "Paused"
+    }
   }
 }

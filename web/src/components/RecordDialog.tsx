@@ -17,7 +17,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import type { DnsRecord, RecordType } from '@/lib/api'
-import { useSaveRecord, useZones } from '@/lib/queries'
+import { probesByRecord } from '@/lib/probes'
+import { useProbes, useSaveRecord, useZones } from '@/lib/queries'
 import { subdomainOf, ttlOptions } from '@/lib/records'
 
 type TypeChoice = RecordType | 'both'
@@ -61,7 +62,12 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
   const [proxied, setProxied] = useState(record?.proxied ?? false)
   const [ttl, setTTL] = useState(record?.ttl ?? 1)
   const [enabled, setEnabled] = useState(record?.enabled ?? true)
+  // undefined = nicht angefasst: beim Bearbeiten bleibt die Prüfung dann unverändert.
+  const [probe, setProbe] = useState<boolean>()
   const [error, setError] = useState<string>()
+  const probes = useProbes()
+  const hasProbe = record !== undefined && probesByRecord(probes.data).has(record.id)
+  const probeOn = probe ?? hasProbe
 
   // Genau eine Zone → vorauswählen
   const effectiveZoneId = zoneId || (zones.data?.length === 1 ? zones.data[0].id : '')
@@ -78,7 +84,16 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
       for (const rt of types) {
         await save.mutateAsync({
           id: record?.id,
-          input: { zone_id: zone.id, name: fqdn, type: rt, proxied, ttl: proxied ? 1 : ttl, enabled },
+          input: {
+            zone_id: zone.id,
+            name: fqdn,
+            type: rt,
+            proxied,
+            ttl: proxied ? 1 : ttl,
+            enabled,
+            // Bei A + AAAA nur einmal prüfen – die Adresse ist dieselbe.
+            probe: rt === types[0] ? probe : undefined,
+          },
         })
         // Scheitert danach AAAA, legt ein erneuter Versuch nur noch AAAA an.
         if (type === 'both' && rt === 'A') setType('AAAA')
@@ -183,6 +198,15 @@ function RecordForm({ record, onDone }: { record?: DnsRecord; onDone: () => void
             <p className="text-muted-foreground text-xs">{t('recordDialog.enabledHint')}</p>
           </div>
           <Switch id="enabled" checked={enabled} onCheckedChange={setEnabled} />
+        </div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid gap-1">
+            <Label htmlFor="probe">{t('recordDialog.probe')}</Label>
+            <p className="text-muted-foreground text-xs">
+              {t('recordDialog.probeHint', { url: `https://${fqdn || '…'}/` })}
+            </p>
+          </div>
+          <Switch id="probe" checked={probeOn} onCheckedChange={setProbe} />
         </div>
       </div>
 

@@ -27,6 +27,7 @@ type dataStore interface {
 	TunnelStatusChanges(ctx context.Context, f store.TunnelChangeFilter, limit int) ([]store.TunnelChange, error)
 	recordStore
 	webhookStore
+	probeStore
 }
 
 type ipTracker interface {
@@ -55,10 +56,12 @@ type Deps struct {
 	WebhookEnv notify.Env
 	// Propagation: DNS-Verbreitungsprüfung (nil = abgeschaltet)
 	Propagation PropagationChecker
-	Info        Info
-	Auth        *Auth
-	Log         *slog.Logger
-	Static      fs.FS
+	// Probes: Erreichbarkeitsprüfungen sofort ausführen (nil = nur speichern)
+	Probes ProbeRunner
+	Info   Info
+	Auth   *Auth
+	Log    *slog.Logger
+	Static fs.FS
 }
 
 type Server struct {
@@ -72,6 +75,7 @@ type Server struct {
 	webhooks    webhookTester
 	webhookEnv  notify.Env
 	propagation PropagationChecker
+	probes      ProbeRunner
 	info        Info
 	auth        *Auth
 	log         *slog.Logger
@@ -81,7 +85,7 @@ type Server struct {
 func NewServer(d Deps) *Server {
 	return &Server{store: d.Store, tracker: d.Tracker, ddns: d.DDNS, zones: d.Zones,
 		tunnels: d.Tunnels, events: d.Events, settings: d.Settings, webhooks: d.Webhooks,
-		webhookEnv: d.WebhookEnv, propagation: d.Propagation, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
+		webhookEnv: d.WebhookEnv, propagation: d.Propagation, probes: d.Probes, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -126,6 +130,11 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/webhooks/{id}", s.handleUpdateWebhook)
 			r.Delete("/webhooks/{id}", s.handleDeleteWebhook)
 			r.Post("/webhooks/{id}/test", s.handleTestWebhook)
+			r.Get("/probes", s.handleListProbes)
+			r.Post("/probes", s.handleCreateProbe)
+			r.Put("/probes/{id}", s.handleUpdateProbe)
+			r.Delete("/probes/{id}", s.handleDeleteProbe)
+			r.Post("/probes/{id}/run", s.handleRunProbe)
 			r.Get("/info", s.handleInfo)
 		})
 

@@ -21,11 +21,15 @@ const (
 	EventUpdateRecovered = "update_recovered"
 	EventTunnelStatus    = "tunnel_status"
 	EventBlocklisted     = "blocklist_listed"
+	EventSiteDown        = "site_down"
+	EventSiteRecovered   = "site_recovered"
+	EventCertExpiring    = "cert_expiring"
 	EventTest            = "test" // Testnachricht, immer zugestellt
 )
 
 // EventTypes in Anzeigereihenfolge.
-var EventTypes = []string{EventIPChange, EventUpdateFailed, EventUpdateRecovered, EventTunnelStatus, EventBlocklisted}
+var EventTypes = []string{EventIPChange, EventUpdateFailed, EventUpdateRecovered, EventTunnelStatus,
+	EventSiteDown, EventSiteRecovered, EventCertExpiring, EventBlocklisted}
 
 // Priorität (angelehnt an ntfy: 1 min … 5 max).
 const (

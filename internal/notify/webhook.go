@@ -347,6 +347,24 @@ func SampleEvent(eventType string) Event {
 			TitleMsg:   i18n.M("notify.tunnel.title", "name", "home", "to", i18n.Ref("tunnel.down")),
 			MessageMsg: i18n.M("notify.tunnel.message", "from", i18n.Ref("tunnel.healthy"), "to", i18n.Ref("tunnel.down")),
 			Data:       map[string]string{"tunnel": "home", "tunnel_id": "…", "from": "healthy", "to": "down"}}
+	case EventSiteDown:
+		return Event{Type: eventType, Priority: PriorityHigh, Time: t,
+			TitleMsg:   i18n.M("notify.site_down.title", "host", "nas.example.com"),
+			MessageMsg: i18n.M("probe.timeout"),
+			Data: map[string]string{"url": "https://nas.example.com/", "host": "nas.example.com", "status": "down",
+				"error": "Timed out – no response"}}
+	case EventSiteRecovered:
+		return Event{Type: eventType, Priority: PriorityDefault, Time: t,
+			TitleMsg:   i18n.M("notify.site_recovered.title", "host", "nas.example.com"),
+			MessageMsg: i18n.M("notify.site_recovered.message", "url", "https://nas.example.com/"),
+			Data: map[string]string{"url": "https://nas.example.com/", "host": "nas.example.com", "status": "up",
+				"http_status": "200"}}
+	case EventCertExpiring:
+		return Event{Type: eventType, Priority: PriorityDefault, Time: t,
+			TitleMsg:   i18n.M("notify.cert_expiring.title", "host", "nas.example.com"),
+			MessageMsg: i18n.M("probe.cert_expires", "date", "2026-01-11", "days", "10"),
+			Data: map[string]string{"url": "https://nas.example.com/", "host": "nas.example.com",
+				"not_after": "2026-01-11T12:00:00Z", "days": "10", "issuer": "Let's Encrypt (R11)"}}
 	case EventBlocklisted:
 		return Event{Type: eventType, Priority: PriorityHigh, Time: t,
 			TitleMsg:   i18n.M("notify.blocklist.title"),

@@ -23,6 +23,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
 	"github.com/mrcdlm/dnsdeck/internal/isp"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
+	"github.com/mrcdlm/dnsdeck/internal/probe"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/scheduler"
@@ -159,6 +160,11 @@ func run() error {
 		log.Warn("CF_ACCOUNT_ID nicht gesetzt – Tunnel-Monitoring ist deaktiviert")
 	}
 
+	// Erreichbarkeit eigener Dienste (HTTP/HTTPS) und Laufzeit ihrer Zertifikate.
+	probes := probe.NewMonitor(st, probe.NewChecker(), log, broker)
+	probes.Notifier = dispatcher
+	probes.WarnDays = func() int { return settings.Get().TLSWarnDays }
+
 	auth, err := api.NewAuth(cfg.AppPassword, st)
 	if err != nil {
 		return err
@@ -182,6 +188,11 @@ func run() error {
 		})
 	}
 	sched.Add(scheduler.Job{
+		Name:     "probes",
+		Interval: func() time.Duration { return settings.Get().ProbeInterval },
+		Run:      probes.Poll,
+	})
+	sched.Add(scheduler.Job{
 		Name:     "session-cleanup",
 		Interval: func() time.Duration { return time.Hour },
 		Run: func(ctx context.Context) error {
@@ -203,7 +214,7 @@ func run() error {
 		Handler: api.NewServer(api.Deps{
 			Store: st, Tracker: tracker, DDNS: svc, Zones: zones,
 			Tunnels: monitor, Events: broker, Settings: settings,
-			Webhooks: dispatcher, WebhookEnv: os.LookupEnv, Propagation: propagation,
+			Webhooks: dispatcher, WebhookEnv: os.LookupEnv, Propagation: propagation, Probes: probes,
 			Info: api.Info{Version: version, CFTokenSet: cfg.CFAPIToken != "", CFAccountSet: cfg.CFAccountID != "",
 				DataDir: cfg.DataDir, DNSCheck: propagation != nil},
 			Auth: auth, Log: log, Static: web.Dist(),

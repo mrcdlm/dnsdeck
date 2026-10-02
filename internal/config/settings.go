@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ const (
 	KeyIPSources       = "ip_sources"
 	KeyTunnelInterval  = "tunnel_poll_interval"
 	KeyNotifyLanguage  = "notify_language"
+	KeyProbeInterval   = "probe_interval"
+	KeyTLSWarnDays     = "tls_warn_days"
 )
 
 const (
@@ -24,6 +27,13 @@ const (
 
 	DefaultTunnelInterval = 60 * time.Second
 	MinTunnelInterval     = 15 * time.Second
+
+	DefaultProbeInterval = 5 * time.Minute
+	MinProbeInterval     = 30 * time.Second
+
+	DefaultTLSWarnDays = 14
+	MinTLSWarnDays     = 1
+	MaxTLSWarnDays     = 90
 )
 
 // Settings sind zur Laufzeit änderbare Einstellungen (keine Secrets).
@@ -36,6 +46,10 @@ type Settings struct {
 	TunnelInterval time.Duration
 	// NotifyLanguage: Sprache der Benachrichtigungen ("de" oder "en").
 	NotifyLanguage string
+	// ProbeInterval: Abstand der Erreichbarkeitsprüfungen.
+	ProbeInterval time.Duration
+	// TLSWarnDays: ab dieser Restlaufzeit (Tage) wird vor Zertifikaten gewarnt.
+	TLSWarnDays int
 }
 
 // DefaultNotifyLanguage ist die Standardsprache der Benachrichtigungen.
@@ -49,7 +63,7 @@ type settingsStore interface {
 // Ungültige Werte werden ignoriert (Default), damit die App immer startet.
 func LoadSettings(ctx context.Context, s settingsStore) (Settings, []error) {
 	out := Settings{IPCheckInterval: DefaultIPCheckInterval, TunnelInterval: DefaultTunnelInterval,
-		NotifyLanguage: DefaultNotifyLanguage}
+		NotifyLanguage: DefaultNotifyLanguage, ProbeInterval: DefaultProbeInterval, TLSWarnDays: DefaultTLSWarnDays}
 	var warnings []error
 
 	if v, err := s.GetSetting(ctx, KeyIPCheckInterval); err == nil {
@@ -79,6 +93,28 @@ func LoadSettings(ctx context.Context, s settingsStore) (Settings, []error) {
 			out.NotifyLanguage = v
 		} else {
 			warnings = append(warnings, fmt.Errorf("%s invalid (%q), using default", KeyNotifyLanguage, v))
+		}
+	} else if !errors.Is(err, store.ErrNotFound) {
+		warnings = append(warnings, err)
+	}
+
+	if v, err := s.GetSetting(ctx, KeyProbeInterval); err == nil {
+		d, perr := time.ParseDuration(v)
+		if perr != nil || d < MinProbeInterval {
+			warnings = append(warnings, fmt.Errorf("%s invalid (%q), using default", KeyProbeInterval, v))
+		} else {
+			out.ProbeInterval = d
+		}
+	} else if !errors.Is(err, store.ErrNotFound) {
+		warnings = append(warnings, err)
+	}
+
+	if v, err := s.GetSetting(ctx, KeyTLSWarnDays); err == nil {
+		n, perr := strconv.Atoi(v)
+		if perr != nil || n < MinTLSWarnDays || n > MaxTLSWarnDays {
+			warnings = append(warnings, fmt.Errorf("%s invalid (%q), using default", KeyTLSWarnDays, v))
+		} else {
+			out.TLSWarnDays = n
 		}
 	} else if !errors.Is(err, store.ErrNotFound) {
 		warnings = append(warnings, err)

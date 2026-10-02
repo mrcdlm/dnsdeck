@@ -34,6 +34,8 @@ eingebauter Weboberfläche und SQLite-Datenbank.
   neue Adresse schon liefern, und zeigt je Eintrag, wie weit die Änderung verbreitet ist.
 - **Cloudflare-Tunnel-Monitoring** – Status, aktive Verbindungen, Rechenzentren,
   Client-Versionen und Uptime über 24 Stunden bzw. 7 Tage je Tunnel.
+- **Erreichbarkeit und Zertifikate** – prüft eigene Dienste per HTTP(S) (je Record mit einem
+  Schalter oder beliebige Adressen), meldet Ausfälle und warnt vor ablaufenden TLS-Zertifikaten.
 - **Live-Dashboard** – aktualisiert sich sofort per Server-Sent Events, mobil nutzbar; heller
   und dunkler Modus nach Systemeinstellung; Deutsch und Englisch.
 - **Sperrlisten-Check** – zeigt, ob die öffentliche IPv4 auf einer Spam-Sperrliste steht
@@ -138,6 +140,7 @@ Unter *Mein Profil → API-Token* ein benutzerdefiniertes Token mit diesen Recht
 - **Tunnels** werden standardmäßig alle 60 Sekunden abgefragt. dnsdeck speichert Zeiträume
   gleichen Status (30 Tage Verlauf); Zeiten ohne Daten – etwa während dnsdeck offline war –
   erscheinen als unbekannt und zählen nicht als Uptime. `degraded` gilt als erreichbar.
+- **Erreichbarkeit:** siehe [unten](#erreichbarkeit-und-zertifikate).
 
 ## DNS-Verbreitung
 
@@ -161,6 +164,25 @@ Die Prüfung sendet nur DNS-Anfragen für die verwalteten Namen (UDP/TCP Port 53
 `DNSCHECK_RESOLVERS` lassen sich andere Resolver wählen, z. B.
 `DNSCHECK_RESOLVERS=Quad9=9.9.9.9,Lokal=192.168.1.1:53`; `DNSCHECK_RESOLVERS=off` schaltet die
 Funktion ab.
+
+## Erreichbarkeit und Zertifikate
+
+Unter **Erreichbarkeit** prüft dnsdeck, ob deine Dienste antworten – für einen Record genügt der
+Schalter **Erreichbarkeit prüfen** im Dialog (geprüft wird `https://<name>/`), zusätzlich lassen
+sich beliebige `http://`- oder `https://`-Adressen eintragen, auch interne.
+
+- Standardmäßig alle 5 Minuten (**Einstellungen**) schickt dnsdeck eine `GET`-Anfrage, ohne
+  Weiterleitungen zu folgen. Jede Antwort unter 500 gilt als erreichbar – auch eine Weiterleitung
+  oder Anmeldeseite.
+- Als nicht erreichbar gilt ein Dienst erst nach **zwei Fehlschlägen in Folge**; kurze Aussetzer
+  lösen so keine Benachrichtigung aus.
+- Bei jeder Anfrage wird das TLS-Zertifikat geprüft: Gültigkeit, Hostname, vertrauenswürdiger
+  Aussteller und Restlaufzeit. Läuft es innerhalb von 14 Tagen ab (einstellbar), warnt dnsdeck
+  einmal je Zertifikat; ein ungültiges Zertifikat zählt als Störung.
+- Geprüft wird aus dem Container heraus. **Nicht** über Cloudflare geleitete Adressen (nur DNS)
+  sind aus dem eigenen Netz manchmal nicht erreichbar, obwohl sie es von außen sind – wenn der
+  Router kein NAT-Loopback (Hairpin-NAT) beherrscht. Proxied Records und Tunnel-Hostnames sind
+  davon nicht betroffen.
 
 ## Sprache und Darstellung
 
@@ -192,6 +214,9 @@ Webhook hat eigene Methode, URL, Header, ein Body-Template und eine eigene Ereig
 - DNS-Update fehlgeschlagen (einmal je neuem Fehler, nicht bei jeder Wiederholung)
 - DNS-Update wieder erfolgreich
 - Tunnel-Status geändert
+- Dienst nicht erreichbar bzw. Zertifikat ungültig / wieder erreichbar (`.Data.url`, `.Data.host`,
+  `.Data.status`, `.Data.http_status`, `.Data.error`)
+- Zertifikat läuft ab (`.Data.url`, `.Data.host`, `.Data.not_after`, `.Data.days`, `.Data.issuer`)
 - Öffentliche IPv4 neu auf einer Sperrliste (`.Data.ip`, `.Data.lists`, `.Data.zones`)
 
 Der Body ist ein Go-[`text/template`](https://pkg.go.dev/text/template) mit den Feldern

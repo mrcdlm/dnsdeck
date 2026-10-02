@@ -14,6 +14,7 @@ const (
 	TopicTunnels  = "tunnels"
 	TopicSettings = "settings"
 	TopicWebhooks = "webhooks"
+	TopicProbes   = "probes"
 )
 
 // Publisher ist das, was Produzenten von Ereignissen brauchen. Ein nil-Publisher

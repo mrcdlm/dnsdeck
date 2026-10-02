@@ -20,6 +20,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/ipdetect"
 	"github.com/mrcdlm/dnsdeck/internal/notify"
+	"github.com/mrcdlm/dnsdeck/internal/probe"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
 	"github.com/mrcdlm/dnsdeck/internal/store"
@@ -108,9 +109,10 @@ func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
 		return v, ok
 	}
 	disp := notify.NewDispatcher(st, env, log)
+	probes := probe.NewMonitor(st, fakeChecker{}, log, broker)
 
 	s := NewServer(Deps{Store: st, Tracker: fakeTracker{}, DDNS: dd, Zones: cf,
-		Tunnels: mon, Events: broker, Settings: settings, Webhooks: disp, WebhookEnv: env,
+		Tunnels: mon, Events: broker, Settings: settings, Webhooks: disp, WebhookEnv: env, Probes: probes,
 		Info: Info{Version: "v1.2.3", CFTokenSet: true}, Auth: auth, Log: log, Static: static})
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
