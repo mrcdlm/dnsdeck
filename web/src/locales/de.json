@@ -14,7 +14,8 @@
     "records": "Records",
     "tunnels": "Tunnels",
     "history": "Verlauf",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "checks": "Erreichbarkeit"
   },
   "live": {
     "on": "Live",
@@ -125,7 +126,12 @@
     "degraded": "{{count}} eingeschränkt",
     "down": "{{count}} getrennt/inaktiv",
     "dnsUpdates": "Letzte DNS-Updates",
-    "dnsUpdatesHint": "Änderungen an den verwalteten Records"
+    "dnsUpdatesHint": "Änderungen an den verwalteten Records",
+    "checks": "Erreichbarkeit",
+    "noChecks": "Keine Prüfungen",
+    "reachable": "{{count}} erreichbar",
+    "certExpiring": "{{count}} Zertifikat läuft ab",
+    "problems": "{{count}} gestört"
   },
   "record": {
     "status": {
@@ -183,7 +189,8 @@
     "logTitle": "Update-Protokoll",
     "logHint": "Angelegte und geänderte Einträge sowie Fehler",
     "removeTitle": "Record nicht mehr verwalten?",
-    "removeHint": "<name>{{name}}</name> wird aus dnsdeck entfernt und nicht mehr aktualisiert. Der Eintrag bei Cloudflare bleibt unverändert bestehen."
+    "removeHint": "<name>{{name}}</name> wird aus dnsdeck entfernt und nicht mehr aktualisiert. Der Eintrag bei Cloudflare bleibt unverändert bestehen.",
+    "probeLabel": "Erreichbarkeit: {{status}}"
   },
   "recordDialog": {
     "addTitle": "Record hinzufügen",
@@ -201,7 +208,9 @@
     "proxied": "Über Cloudflare proxien",
     "proxiedHint": "Orange Wolke: Verkehr läuft über Cloudflare, die TTL ist dann automatisch.",
     "enabled": "Automatisch aktualisieren",
-    "enabledHint": "Deaktiviert: Eintrag bleibt verwaltet, wird aber nicht geändert."
+    "enabledHint": "Deaktiviert: Eintrag bleibt verwaltet, wird aber nicht geändert.",
+    "probe": "Erreichbarkeit prüfen",
+    "probeHint": "Ruft {{url}} regelmäßig auf und überwacht das Zertifikat."
   },
   "tunnel": {
     "status": {
@@ -297,7 +306,13 @@
     "notifyLanguage": "Sprache der Benachrichtigungen",
     "notifyLanguageHint": "Unabhängig von der Sprache der Oberfläche, die jeder Browser selbst wählt.",
     "saved": "Gespeichert",
-    "discard": "Verwerfen"
+    "discard": "Verwerfen",
+    "probeInterval": "Erreichbarkeit prüfen",
+    "probeIntervalHint": "Ein Ausfall wird nach zwei Fehlschlägen in Folge gemeldet.",
+    "tlsWarnDays": "Vor Zertifikatsablauf warnen",
+    "tlsWarnDaysHint": "Restlaufzeit, ab der ein Zertifikat als „läuft ab“ gilt und gemeldet wird.",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage"
   },
   "events": {
     "ip_change": {
@@ -319,6 +334,18 @@
     "blocklist_listed": {
       "label": "IP auf Sperrliste",
       "hint": "Die öffentliche IPv4 wurde neu auf einer DNS-Sperrliste gefunden (z. B. Spamhaus) – relevant für eigene Mailserver."
+    },
+    "site_down": {
+      "label": "Nicht erreichbar",
+      "hint": "Eine geprüfte Adresse antwortet nicht mehr oder ihr Zertifikat ist ungültig."
+    },
+    "site_recovered": {
+      "label": "Wieder erreichbar",
+      "hint": "Eine zuvor gestörte Adresse antwortet wieder."
+    },
+    "cert_expiring": {
+      "label": "Zertifikat läuft ab",
+      "hint": "Einmal je Zertifikat, sobald die eingestellte Restlaufzeit erreicht ist."
     }
   },
   "webhooks": {
@@ -421,5 +448,42 @@
     "watching": "wird automatisch wiederholt",
     "checkNow": "Jetzt prüfen",
     "disabled": "DNS-Verbreitungsprüfung abgeschaltet (DNSCHECK_RESOLVERS=off)"
+  },
+  "checks": {
+    "subtitle": "Antworten deine Dienste, und wie lange gelten ihre Zertifikate?",
+    "url": "Adresse",
+    "add": "Prüfung hinzufügen",
+    "loadError": "Prüfungen konnten nicht geladen werden: {{error}}",
+    "empty": "Noch keine Prüfungen. Adresse oben eintragen oder bei einem Record „Erreichbarkeit prüfen“ einschalten.",
+    "fromRecord": "aus Record",
+    "noTLS": "kein TLS",
+    "certExpired": "abgelaufen",
+    "certDays_one": "noch {{count}} Tag",
+    "certDays_other": "noch {{count}} Tage",
+    "enable": "Prüfung einschalten",
+    "disable": "Prüfung pausieren",
+    "enabledLabel": "{{url}} prüfen",
+    "run": "Jetzt prüfen",
+    "runLabel": "{{url}} jetzt prüfen",
+    "removeLabel": "{{url}} entfernen",
+    "removeTitle": "Prüfung entfernen?",
+    "removeHint": "<url>{{url}}</url> wird nicht mehr geprüft.",
+    "removeRecordHint": "<url>{{url}}</url> wird nicht mehr geprüft. Der Record selbst bleibt erhalten.",
+    "howItWorks": "dnsdeck ruft jede Adresse per GET auf, ohne Weiterleitungen zu folgen. Jede Antwort unter 500 gilt als erreichbar – auch eine Anmeldeseite. Vor Zertifikaten wird {{days}} Tage vor Ablauf gewarnt.",
+    "hairpin": "Geprüft wird aus dem Container heraus. Nicht über Cloudflare geleitete Adressen sind aus dem eigenen Netz manchmal nicht erreichbar, obwohl sie es von außen sind (fehlendes NAT-Loopback am Router).",
+    "col": {
+      "url": "Adresse",
+      "status": "Status",
+      "response": "Antwort",
+      "certificate": "Zertifikat"
+    },
+    "status": {
+      "pending": "Ausstehend",
+      "up": "Erreichbar",
+      "expiring": "Zertifikat läuft ab",
+      "tls_error": "Zertifikat ungültig",
+      "down": "Nicht erreichbar",
+      "paused": "Pausiert"
+    }
   }
 }

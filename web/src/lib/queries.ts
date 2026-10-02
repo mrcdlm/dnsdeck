@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import {
   api,
   type IPHistoryFilter,
+  type ProbeInput,
   type RecordInput,
   type Settings,
   type TunnelHistoryFilter,
@@ -120,6 +121,36 @@ export function useRefreshTunnels() {
   return useMutation({
     mutationFn: api.refreshTunnels,
     onSuccess: (o) => qc.setQueryData(keys.tunnels, o),
+  })
+}
+
+export function useProbes() {
+  const poll = usePollInterval()
+  return useQuery({ queryKey: keys.probes, queryFn: api.probes, refetchInterval: poll })
+}
+
+export function useSaveProbe() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: number; input: ProbeInput }) =>
+      id ? api.updateProbe(id, input) : api.createProbe(input),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.probes }),
+  })
+}
+
+export function useDeleteProbe() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.deleteProbe,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.probes }),
+  })
+}
+
+export function useRunProbe() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.runProbe,
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.probes }),
   })
 }
 

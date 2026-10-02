@@ -17,6 +17,7 @@ import (
 const (
 	MaxIPCheckInterval = 24 * time.Hour
 	MaxTunnelInterval  = time.Hour
+	MaxProbeInterval   = 24 * time.Hour
 	MinIPSources       = 2 // Mehrheitsentscheid braucht mindestens zwei Quellen
 )
 
@@ -86,6 +87,8 @@ func (s *SettingsService) Update(ctx context.Context, next Settings) (Settings, 
 		{KeyTunnelInterval, next.TunnelInterval.String()},
 		{KeyIPSources, strings.Join(next.IPSources, ",")},
 		{KeyNotifyLanguage, next.NotifyLanguage},
+		{KeyProbeInterval, next.ProbeInterval.String()},
+		{KeyTLSWarnDays, strconv.Itoa(next.TLSWarnDays)},
 	} {
 		if err := s.store.SetSetting(ctx, kv[0], kv[1]); err != nil {
 			return Settings{}, err
@@ -111,6 +114,12 @@ func (s *SettingsService) validate(n Settings) error {
 	}
 	if n.TunnelInterval < MinTunnelInterval || n.TunnelInterval > MaxTunnelInterval {
 		add("settings.tunnel_interval_range", "min", MinTunnelInterval.String(), "max", MaxTunnelInterval.String())
+	}
+	if n.ProbeInterval < MinProbeInterval || n.ProbeInterval > MaxProbeInterval {
+		add("settings.probe_interval_range", "min", MinProbeInterval.String(), "max", MaxProbeInterval.String())
+	}
+	if n.TLSWarnDays < MinTLSWarnDays || n.TLSWarnDays > MaxTLSWarnDays {
+		add("settings.tls_warn_days_range", "min", strconv.Itoa(MinTLSWarnDays), "max", strconv.Itoa(MaxTLSWarnDays))
 	}
 	seen := map[string]bool{}
 	for _, name := range n.IPSources {

@@ -103,6 +103,8 @@ type recordInput struct {
 	Proxied bool   `json:"proxied"`
 	TTL     int    `json:"ttl"`
 	Enabled *bool  `json:"enabled"`
+	// Probe: Erreichbarkeit von https://<name>/ prüfen (nil = unverändert).
+	Probe *bool `json:"probe"`
 }
 
 var labelRe = regexp.MustCompile(`^[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?$`)
@@ -190,6 +192,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "Record anlegen", err)
 		return
 	}
+	s.syncRecordProbe(r.Context(), created, in.Probe)
 	writeJSON(w, http.StatusCreated, s.localizeRecord(s.syncAfterSave(r, created), i18n.FromRequest(r)))
 }
 
@@ -220,6 +223,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "Record ändern", err)
 		return
 	}
+	s.syncRecordProbe(r.Context(), updated, in.Probe)
 	writeJSON(w, http.StatusOK, s.localizeRecord(s.syncAfterSave(r, updated), i18n.FromRequest(r)))
 }
 

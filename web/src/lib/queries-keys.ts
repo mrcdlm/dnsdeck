@@ -8,5 +8,6 @@ export const keys = {
   tunnels: ['tunnels'] as const,
   settings: ['settings'] as const,
   webhooks: ['webhooks'] as const,
+  probes: ['probes'] as const,
   info: ['info'] as const,
 }

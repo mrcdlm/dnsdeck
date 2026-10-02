@@ -27,6 +27,9 @@ Läuft als **ein einziger Docker-Container** auf jedem Linux-Host mit Docker Com
 /internal/tunnels    Cloudflare-Tunnel-Monitoring
 /internal/notify     Benachrichtigungen (generische Webhooks)
 /internal/dnscheck   DNS-Verbreitungsprüfung (öffentliche Resolver + autoritative NS)
+/internal/isp        Anbieter (AS) der öffentlichen IPs per DNS (Team Cymru)
+/internal/dnsbl      Sperrlisten-Prüfung der öffentlichen IPv4 (Spamhaus & Co.)
+/internal/probe      Erreichbarkeit eigener Dienste (HTTP/HTTPS) + TLS-Zertifikate
 /internal/i18n       Nachrichtenkatalog DE/EN für alle Server-Meldungen
 /internal/scheduler  periodische Jobs
 /internal/store      SQLite, Migrationen
@@ -68,6 +71,7 @@ Läuft als **ein einziger Docker-Container** auf jedem Linux-Host mit Docker Com
 - **Dashboard:** große IP-Karte (v4/v6, seit wann), Status-Kacheln für Records und Tunnels, letzte Ereignisse
 - **Records:** Tabelle aller verwalteten Records, hinzufügen/bearbeiten/löschen, Status-Badge
 - **Tunnels:** Karten je Tunnel mit Status, Verbindungen, Uptime-Balken der letzten 24 h / 7 Tage
+- **Erreichbarkeit:** HTTP(S)-Prüfungen (je Record per Schalter oder freie URL), Zertifikatslaufzeit
 - **Verlauf:** IP-Wechsel und Update-Log, filterbar
 - **Einstellungen:** Intervalle, IP-Quellen, Webhooks
 

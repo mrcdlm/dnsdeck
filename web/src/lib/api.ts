@@ -128,6 +128,8 @@ export interface RecordInput {
   proxied: boolean
   ttl: number
   enabled: boolean
+  /** Erreichbarkeit von https://<name>/ prüfen (fehlt = unverändert) */
+  probe?: boolean
 }
 
 export interface Zone {
@@ -204,12 +206,50 @@ export interface TunnelChange {
   at: string
 }
 
-export type NotifyEventType = 'ip_change' | 'update_failed' | 'update_recovered' | 'tunnel_status' | 'blocklist_listed'| 'tunnel_status'
+export type NotifyEventType =
+  | 'ip_change'
+  | 'update_failed'
+  | 'update_recovered'
+  | 'tunnel_status'
+  | 'site_down'
+  | 'site_recovered'
+  | 'cert_expiring'
+  | 'blocklist_listed'
+
+export type ProbeStatus = 'pending' | 'up' | 'expiring' | 'tls_error' | 'down' | 'paused'
+
+/** Erreichbarkeitsprüfung (HTTP/HTTPS) einer Adresse. */
+export interface Probe {
+  id: number
+  /** gesetzt = Prüfung von https://<record_name>/, folgt dem Record */
+  record_id?: number
+  record_name?: string
+  url: string
+  enabled: boolean
+  status: ProbeStatus
+  http_status?: number
+  latency_ms?: number
+  /** Fehlschläge in Folge */
+  fail_count: number
+  message?: string
+  tls_not_after?: string
+  tls_issuer?: string
+  tls_valid?: boolean
+  last_checked_at?: string
+  last_changed_at?: string
+}
+
+export interface ProbeInput {
+  url?: string
+  enabled?: boolean
+}
 
 export interface Settings {
   ip_check_interval_seconds: number
   tunnel_interval_seconds: number
   notify_language: 'de' | 'en'
+  probe_interval_seconds: number
+  tls_warn_days: number
   ip_sources: { name: string; enabled: boolean }[]
   limits: Record<string, number>
 }
@@ -352,5 +392,10 @@ export const api = {
   testWebhook: (id: number) => request<TestResult>('POST', `/api/webhooks/${id}/test`),
   previewWebhook: (w: WebhookInput, eventType: string) =>
     request<WebhookPreview>('POST', '/api/webhooks/preview', { ...w, event_type: eventType }),
+  probes: () => request<Probe[]>('GET', '/api/probes'),
+  createProbe: (p: ProbeInput) => request<Probe>('POST', '/api/probes', p),
+  updateProbe: (id: number, p: ProbeInput) => request<Probe>('PUT', `/api/probes/${id}`, p),
+  deleteProbe: (id: number) => request<void>('DELETE', `/api/probes/${id}`),
+  runProbe: (id: number) => request<Probe>('POST', `/api/probes/${id}/run`),
   info: () => request<Info>('GET', '/api/info'),
 }

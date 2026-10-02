@@ -1,6 +1,7 @@
-import { AlertTriangle, Cloud, CloudOff, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Activity, AlertTriangle, Cloud, CloudOff, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 
 import { PropagationBadge } from '@/components/Propagation'
 import { RecordDialog } from '@/components/RecordDialog'
@@ -20,20 +21,22 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ApiError, type DnsRecord } from '@/lib/api'
+import { ApiError, type DnsRecord, type Probe } from '@/lib/api'
 import { absoluteTime, relativeTime, useNow } from '@/lib/format'
-import { useDeleteRecord, useRecords, useRefreshIP, useSyncRecord, useZones } from '@/lib/queries'
+import { probesByRecord } from '@/lib/probes'
+import { useDeleteRecord, useProbes, useRecords, useRefreshIP, useSyncRecord, useZones } from '@/lib/queries'
 import { formatTTL, recordStatusVariant } from '@/lib/records'
 import { cn } from '@/lib/utils'
 
 interface RowProps {
   record: DnsRecord
+  probe?: Probe
   now: number
   onEdit: () => void
   onDelete: () => void
 }
 
-function RecordActions({ record, onEdit, onDelete }: Omit<RowProps, 'now'>) {
+function RecordActions({ record, onEdit, onDelete }: Omit<RowProps, 'now' | 'probe'>) {
   const { t } = useTranslation()
   const sync = useSyncRecord()
   const name = `${record.name} ${record.type}`
@@ -94,11 +97,35 @@ function ProxyIcon({ proxied }: { proxied: boolean }) {
   )
 }
 
-function RecordRow({ record, now, onEdit, onDelete }: RowProps) {
+const probeColor: Record<Probe['status'], string> = {
+  up: 'text-success',
+  expiring: 'text-warning',
+  tls_error: 'text-destructive',
+  down: 'text-destructive',
+  pending: 'text-muted-foreground',
+  paused: 'text-muted-foreground',
+}
+
+/** Symbol für eine aktive Erreichbarkeitsprüfung, verlinkt auf die Übersicht. */
+function ProbeIndicator({ probe }: { probe?: Probe }) {
+  const { t } = useTranslation()
+  if (!probe) return null
+  const label = t('records.probeLabel', { status: t(`checks.status.${probe.status}`) })
+  return (
+    <Link to="/erreichbarkeit" title={label} aria-label={label} className="shrink-0">
+      <Activity className={cn('size-3.5', probeColor[probe.status])} />
+    </Link>
+  )
+}
+
+function RecordRow({ record, probe, now, onEdit, onDelete }: RowProps) {
   return (
     <TableRow className={cn(!record.enabled && 'opacity-60')}>
       <TableCell className="max-w-[16rem]">
-        <div className="font-medium break-all">{record.name}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium break-all">{record.name}</span>
+          <ProbeIndicator probe={probe} />
+        </div>
         <div className="text-muted-foreground text-xs">{record.zone_name}</div>
       </TableCell>
       <TableCell>
@@ -130,7 +157,7 @@ function RecordRow({ record, now, onEdit, onDelete }: RowProps) {
 }
 
 /** Mobile Darstellung: eine Karte je Record statt Tabellenzeile. */
-function RecordCard({ record, now, onEdit, onDelete }: RowProps) {
+function RecordCard({ record, probe, now, onEdit, onDelete }: RowProps) {
   const { t } = useTranslation()
   return (
     <li
@@ -142,6 +169,7 @@ function RecordCard({ record, now, onEdit, onDelete }: RowProps) {
           <div className="flex items-center gap-2">
             <span className="font-medium [overflow-wrap:anywhere]">{record.name}</span>
             <Badge variant="outline">{record.type}</Badge>
+            <ProbeIndicator probe={probe} />
           </div>
           <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
             <ProxyIcon proxied={record.proxied} />
@@ -170,6 +198,7 @@ export function Records() {
   const zones = useZones()
   const refresh = useRefreshIP()
   const del = useDeleteRecord()
+  const probes = probesByRecord(useProbes().data)
   const now = useNow()
 
   const [dialog, setDialog] = useState<{ open: boolean; record?: DnsRecord }>({ open: false })
@@ -259,6 +288,7 @@ export function Records() {
                     <RecordRow
                       key={r.id}
                       record={r}
+                      probe={probes.get(r.id)}
                       now={now}
                       onEdit={() => setDialog({ open: true, record: r })}
                       onDelete={() => setToDelete(r)}
@@ -272,6 +302,7 @@ export function Records() {
                 <RecordCard
                   key={r.id}
                   record={r}
+                  probe={probes.get(r.id)}
                   now={now}
                   onEdit={() => setDialog({ open: true, record: r })}
                   onDelete={() => setToDelete(r)}

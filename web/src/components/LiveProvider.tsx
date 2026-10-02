@@ -12,6 +12,7 @@ const topicKeys: Record<string, readonly (readonly string[])[]> = {
   tunnels: [keys.tunnels],
   settings: [keys.settings],
   webhooks: [keys.webhooks],
+  probes: [keys.probes],
 }
 
 /**

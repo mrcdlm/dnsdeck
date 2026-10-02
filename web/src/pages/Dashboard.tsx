@@ -1,4 +1,5 @@
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
   Building2,
@@ -23,7 +24,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Blocklist, BlocklistStatus, Family, FamilyState, ISPInfo } from '@/lib/api'
 import { absoluteTime, countryName, relativeTime, useNow } from '@/lib/format'
-import { useIP, useIPHistory, useRecords, useRefreshIP, useTunnels } from '@/lib/queries'
+import { useIP, useIPHistory, useProbes, useRecords, useRefreshIP, useTunnels } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
 const familyLabel: Record<Family, string> = { ipv4: 'IPv4', ipv6: 'IPv6' }
@@ -360,6 +361,45 @@ function TunnelsTile() {
   )
 }
 
+function ChecksTile() {
+  const { t } = useTranslation()
+  const probes = useProbes()
+  const active = (probes.data ?? []).filter((p) => p.enabled)
+  const counts = { up: 0, warn: 0, down: 0 }
+  for (const p of active) {
+    if (p.status === 'up') counts.up++
+    else if (p.status === 'expiring') counts.warn++
+    else if (p.status === 'down' || p.status === 'tls_error') counts.down++
+  }
+
+  return (
+    <Link
+      to="/erreichbarkeit"
+      className="group bg-card hover:bg-accent/40 flex items-center gap-4 rounded-xl border p-5 transition-colors"
+    >
+      <span className="bg-muted grid size-10 shrink-0 place-items-center rounded-lg">
+        <Activity className="size-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-muted-foreground text-sm">{t('dashboard.checks')}</div>
+        {probes.isPending ? (
+          <Skeleton className="mt-1 h-6 w-32" />
+        ) : active.length === 0 ? (
+          <div className="font-medium">{t('dashboard.noChecks')}</div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 font-medium">
+            <span>{t('dashboard.monitored', { count: active.length })}</span>
+            {counts.up > 0 && <Badge variant="success">{t('dashboard.reachable', { count: counts.up })}</Badge>}
+            {counts.warn > 0 && <Badge variant="warning">{t('dashboard.certExpiring', { count: counts.warn })}</Badge>}
+            {counts.down > 0 && <Badge variant="destructive">{t('dashboard.problems', { count: counts.down })}</Badge>}
+          </div>
+        )}
+      </div>
+      <ChevronRight className="text-muted-foreground size-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  )
+}
+
 export function Dashboard() {
   const { t } = useTranslation()
   return (
@@ -369,9 +409,10 @@ export function Dashboard() {
         <p className="text-muted-foreground text-sm">{t('dashboard.subtitle')}</p>
       </div>
       <IPCard />
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <RecordsTile />
         <TunnelsTile />
+        <ChecksTile />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <IPChangesCard />

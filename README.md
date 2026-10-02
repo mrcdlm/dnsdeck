@@ -32,6 +32,8 @@ container (≈ 30 MB, amd64 and arm64) with an embedded web interface and an SQL
   return the new address, and shows per record how far the change has spread.
 - **Cloudflare Tunnel monitoring** – status, active connections, data centers, client
   versions and 24 h / 7 day uptime per tunnel.
+- **Reachability and certificates** – checks your own services over HTTP(S) (per record with
+  one switch, or any URL), reports outages and warns before TLS certificates expire.
 - **Live dashboard** – updates instantly via Server-Sent Events, works on mobile; light and
   dark mode following the system setting; English and German.
 - **Blocklist check** – shows whether your public IPv4 is on a spam blocklist (Spamhaus,
@@ -134,6 +136,7 @@ use *Client IP Address Filtering* – the token would lock itself out after your
 - **Tunnels** are polled every 60 seconds by default. dnsdeck stores periods of equal status (30 days of
   history); times without data – for example while dnsdeck was offline – are shown as unknown
   instead of being counted as uptime. `degraded` counts as available.
+- **Reachability:** see [below](#reachability-and-certificates).
 
 ## DNS propagation
 
@@ -155,6 +158,23 @@ The check only sends DNS queries for your managed record names (UDP/TCP port 53)
 `DNSCHECK_RESOLVERS` to choose other resolvers, for example
 `DNSCHECK_RESOLVERS=Quad9=9.9.9.9,Local=192.168.1.1:53`, or `DNSCHECK_RESOLVERS=off` to disable
 the feature.
+
+## Reachability and certificates
+
+Under **Reachability** dnsdeck checks whether your services respond – for a record simply turn
+on **Check reachability** in its dialog (checks `https://<name>/`), or add any `http://` or
+`https://` URL, including internal ones.
+
+- Every 5 minutes by default (**Settings**), dnsdeck sends a `GET` request without following
+  redirects. Any response below 500 counts as reachable – a redirect or login page too.
+- A service only counts as unreachable after **two failures in a row**, so short hiccups do not
+  trigger notifications.
+- The TLS certificate is checked on every request: validity, host name, trusted issuer and
+  remaining lifetime. dnsdeck warns once per certificate when it expires within 14 days
+  (configurable); an invalid certificate counts as an outage.
+- Checks run from inside the container. Addresses **not** routed through Cloudflare (DNS only)
+  can be unreachable from your own network even though they work from outside, if your router
+  lacks NAT loopback (hairpin NAT). Proxied records and tunnel hostnames are not affected.
 
 ## Languages and appearance
 
@@ -184,6 +204,9 @@ own method, URL, headers, body template and event selection:
 - DNS update failed (once per new error, not on every retry)
 - DNS update recovered
 - Tunnel status changed
+- Service unreachable or certificate invalid / reachable again (`.Data.url`, `.Data.host`,
+  `.Data.status`, `.Data.http_status`, `.Data.error`)
+- Certificate expiring (`.Data.url`, `.Data.host`, `.Data.not_after`, `.Data.days`, `.Data.issuer`)
 - Public IPv4 newly found on a blocklist (`.Data.ip`, `.Data.lists`, `.Data.zones`)
 
 The body is a Go [`text/template`](https://pkg.go.dev/text/template) with the fields

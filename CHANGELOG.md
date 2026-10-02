@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PSBL, Mailspike) after every IP change and every 24 hours. The result is shown in the IP
   card; new listings trigger the new webhook event `blocklist_listed`. Spamhaus PBL is shown as
   information only. `DNSBL_LISTS` selects the lists or disables the check (`off`).
+- Reachability and certificate monitoring: new page **Reachability** checks your own services
+  over HTTP(S) – per record with a switch in the record dialog, or any URL. Outages are reported
+  after two failures in a row; TLS certificates are verified (expiry, host name, issuer) with a
+  warning before they expire (default 14 days). New webhook events `site_down`,
+  `site_recovered` and `cert_expiring`; check interval and warning period under **Settings**.
 
 ## [0.2.1] – 2026-09-30
 

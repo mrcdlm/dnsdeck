@@ -10,6 +10,7 @@ import { Login } from '@/pages/Login'
 // Unterseiten erst bei Bedarf laden (kleineres Start-Bundle).
 const Records = lazy(() => import('@/pages/Records').then((m) => ({ default: m.Records })))
 const Tunnels = lazy(() => import('@/pages/Tunnels').then((m) => ({ default: m.Tunnels })))
+const Checks = lazy(() => import('@/pages/Checks').then((m) => ({ default: m.Checks })))
 const History = lazy(() => import('@/pages/History').then((m) => ({ default: m.History })))
 const Settings = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.Settings })))
 
@@ -41,7 +42,8 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="records" element={<Lazy><Records /></Lazy>} />
         <Route path="tunnels" element={<Lazy><Tunnels /></Lazy>} />
-        <Route path="verlauf" element={<Lazy><History /></Lazy>} />
+        <Route path="erreichbarkeit" element={<Lazy><Checks /></Lazy>} />
+        <Route path="verlauf"element={<Lazy><History /></Lazy>} />
         <Route path="einstellungen" element={<Lazy><Settings /></Lazy>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
