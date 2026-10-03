@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/providers"
@@ -124,5 +127,34 @@ func TestListTunnels(t *testing.T) {
 	// falsche Account-ID → verständlicher Rechte-Fehler
 	if _, err := c.ListTunnels(ctx, "falsch"); !errors.Is(err, ErrTunnelPermission) {
 		t.Fatalf("ErrTunnelPermission erwartet, bekam %v", err)
+	}
+}
+
+// Verbindungsfehler erscheinen ohne die (lange) angefragte URL.
+func TestNetworkErrors(t *testing.T) {
+	block := make(chan struct{})
+	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-block:
+		case <-r.Context().Done():
+		}
+	}))
+	defer slow.Close()
+	defer close(block)
+	c := New("test-token", slow.URL)
+	c.http.Timeout = 50 * time.Millisecond
+	_, err := c.ListZones(context.Background())
+	if m := i18n.FromError(err); m.Code != "cf.timeout" {
+		t.Fatalf("Zeitüberschreitung: %+v", m)
+	}
+
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	addr := ln.Addr().String()
+	ln.Close()
+	_, err = New("test-token", "http://"+addr).ListZones(context.Background())
+	m := i18n.FromError(err)
+	if m.Code != "cf.unreachable" || strings.Contains(m.Params["detail"], "http://") ||
+		!strings.Contains(m.Params["detail"], "connection refused") {
+		t.Fatalf("abgelehnt: %+v", m)
 	}
 }

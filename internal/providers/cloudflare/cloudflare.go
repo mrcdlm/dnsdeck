@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -80,6 +82,24 @@ func (e *APIError) LocalizedMsg() i18n.Msg {
 }
 
 // errNotConfigured: kein Token – erkennbar per errors.Is(err, providers.ErrNotConfigured).
+// networkMsg übersetzt Verbindungsfehler in eine kurze Meldung – ohne die
+// angefragte URL (lang, enthält Zonen-ID und Abfrageparameter).
+func networkMsg(err error) i18n.Msg {
+	var netErr net.Error
+	var dnsErr *net.DNSError
+	switch {
+	case errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()):
+		return i18n.M("cf.timeout")
+	case errors.As(err, &dnsErr):
+		return i18n.M("cf.dns", "host", dnsErr.Name)
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		err = urlErr.Err
+	}
+	return i18n.M("cf.unreachable", "detail", err.Error())
+}
+
 var errNotConfigured = &i18n.Error{Msg: i18n.M("cf.not_configured"), Wrap: providers.ErrNotConfigured}
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body any) (*envelope, error) {
@@ -110,7 +130,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, i18n.Wrap(err, "cf.unreachable")
+		return nil, &i18n.Error{Msg: networkMsg(err), Wrap: err}
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))

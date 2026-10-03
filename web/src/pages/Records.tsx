@@ -77,7 +77,7 @@ function RecordStatus({ record }: { record: DnsRecord }) {
       {record.message && record.status !== 'ok' && (
         <p
           className={cn(
-            'mt-1 text-xs break-words',
+            'mt-1 text-xs [overflow-wrap:anywhere]',
             record.status === 'error' ? 'text-destructive' : 'text-muted-foreground',
           )}
         >

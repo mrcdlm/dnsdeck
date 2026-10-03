@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Connection errors to Cloudflare are shown as a short message (e.g. “Cloudflare did not
+  respond in time”) instead of the raw Go error with the full request URL; entries already
+  stored are shortened when displayed.
+- Long messages in the update log, history, records and reachability checks wrap instead of
+  overflowing their card.
+
 ## [0.3.0] – 2026-10-02
 
 ### Added

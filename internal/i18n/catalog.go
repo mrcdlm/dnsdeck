@@ -35,6 +35,8 @@ var catalog = map[string]entry{
 	"cf.api_http":            {"Cloudflare-API: HTTP {status}", "Cloudflare API: HTTP {status}"},
 	"cf.api_error":           {"Cloudflare-API: HTTP {status}: {detail}", "Cloudflare API: HTTP {status}: {detail}"},
 	"cf.unreachable":         {"Cloudflare nicht erreichbar: {detail}", "Cloudflare unreachable: {detail}"},
+	"cf.timeout":             {"Cloudflare hat nicht rechtzeitig geantwortet (Zeitüberschreitung)", "Cloudflare did not respond in time (timeout)"},
+	"cf.dns":                 {"Cloudflare nicht erreichbar: {host} lässt sich nicht auflösen (DNS des Containers prüfen)", "Cloudflare unreachable: {host} does not resolve (check the container's DNS)"},
 	"cf.multiple_records":    {"{count} {type}-Einträge für {name} vorhanden – bitte bei Cloudflare auf einen reduzieren", "{count} {type} records exist for {name} – please reduce them to one at Cloudflare"},
 	"cf.tunnel_permission":   {"Kein Zugriff auf Tunnels – das Token braucht Account → Cloudflare Tunnel → Read und CF_ACCOUNT_ID muss stimmen ({detail})", "No access to tunnels – the token needs Account → Cloudflare Tunnel → Read and CF_ACCOUNT_ID must be correct ({detail})"},
 	"tunnels.not_configured": {"Tunnel-Monitoring nicht konfiguriert (CF_API_TOKEN/CF_ACCOUNT_ID)", "Tunnel monitoring is not configured (CF_API_TOKEN/CF_ACCOUNT_ID)"},
