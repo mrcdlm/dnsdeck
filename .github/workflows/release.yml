@@ -96,16 +96,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+      # Text aus dem passenden Abschnitt in CHANGELOG.md (fehlt er, bricht der Job ab)
+      - name: Release Notes erzeugen
+        run: .github/scripts/release-notes.sh "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > release-notes.md
       - uses: softprops/action-gh-release@v2
         with:
+          name: dnsdeck ${{ github.ref_name }}
+          body_path: release-notes.md
           generate_release_notes: true
-          body: |
-            **Image:** `ghcr.io/${{ github.repository_owner }}/dnsdeck` (linux/amd64, linux/arm64)
-
-            To update, set `DNSDECK_VERSION` in `.env` to this version (without "v"), then run:
-
-            ```sh
-            docker compose pull && docker compose up -d
-            ```
-
-            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.

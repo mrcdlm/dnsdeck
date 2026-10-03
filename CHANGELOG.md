@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `docker-compose.yml` when updating.
 - A warning is logged on start if a plain-text `APP_PASSWORD` is shorter than 12 characters.
 - Updated screenshots; contribution guide, issue templates and Dependabot configuration.
+- GitHub releases show the changes from this changelog instead of a generic text.
 
 ## [0.3.1] – 2026-10-03
 

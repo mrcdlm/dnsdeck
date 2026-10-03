@@ -1,0 +1,36 @@
+# Schreibt Titel und Text bestehender GitHub-Releases aus CHANGELOG.md neu.
+# Manuell starten: Actions → „Release-Notes aktualisieren“ → Run workflow.
+name: Release-Notes aktualisieren
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Nur dieses Release (z. B. v0.3.1); leer = alle'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Releases aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ONLY: ${{ inputs.tag }}
+        run: |
+          tags="$ONLY"
+          if [ -z "$tags" ]; then
+            tags=$(gh release list --limit 100 --json tagName --jq '.[].tagName')
+          fi
+          for tag in $tags; do
+            if .github/scripts/release-notes.sh "$tag" "$GITHUB_REPOSITORY" > notes.md; then
+              gh release edit "$tag" --title "dnsdeck $tag" --notes-file notes.md
+              echo "✓ $tag"
+            else
+              echo "– $tag übersprungen (kein Abschnitt in CHANGELOG.md)"
+            fi
+          done
