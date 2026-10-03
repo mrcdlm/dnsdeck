@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Docker Compose: the container drops all Linux capabilities and runs with
+  `no-new-privileges` (dnsdeck needs neither). Take over these two lines into your own
+  `docker-compose.yml` when updating.
+- A warning is logged on start if a plain-text `APP_PASSWORD` is shorter than 12 characters.
+- Updated screenshots; contribution guide, issue templates and Dependabot configuration.
+
 ## [0.3.1] – 2026-10-03
 
 ### Fixed

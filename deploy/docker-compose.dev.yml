@@ -9,6 +9,8 @@ services:
     image: dnsdeck:dev
     container_name: dnsdeck
     restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     ports:
       - "${DNSDECK_PORT:-8080}:8080"
     env_file: .env

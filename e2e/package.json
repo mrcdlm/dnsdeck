@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "screenshots": "SCREENSHOTS=1 WEBHOOK_TELEGRAM_TOKEN=example WEBHOOK_TELEGRAM_CHAT_ID=123456789 WEBHOOK_NTFY_TOPIC=example playwright test screenshots"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0"

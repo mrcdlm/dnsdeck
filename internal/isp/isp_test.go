@@ -51,14 +51,14 @@ func TestLookupIPv4(t *testing.T) {
 			},
 			"AS3320.asn.cymru.com": {"3320 | DE | ripencc | 1993-02-10 | DTAG Internet service provider operations, DE"},
 		},
-		ptr: map[string][]string{"203.0.113.7": {"p5dd8a0b7.dip0.t-ipconnect.de."}},
+		ptr: map[string][]string{"203.0.113.7": {"host-203-0-113-7.example.net."}},
 	}
 	got, err := (&Lookup{Resolver: r, Timeout: time.Second}).Lookup(t.Context(), netip.MustParseAddr("203.0.113.7"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := Info{ASN: 3320, Name: "DTAG Internet service provider operations", Prefix: "203.0.113.0/24",
-		Country: "DE", Registry: "ripencc", Hostname: "p5dd8a0b7.dip0.t-ipconnect.de"}
+		Country: "DE", Registry: "ripencc", Hostname: "host-203-0-113-7.example.net"}
 	if got != want {
 		t.Errorf("got %+v\nwant %+v", got, want)
 	}

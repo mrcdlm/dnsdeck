@@ -49,9 +49,9 @@ eingebauter Weboberfläche und SQLite-Datenbank.
 - **Sicher voreingestellt** – läuft ohne Root-Rechte auf einem Distroless-Image; Geheimnisse
   nur per Umgebungsvariable; Login mit einem Passwort und Schutz vor Brute-Force-Versuchen.
 
-| Records | Tunnels | Webhooks |
-|---|---|---|
-| ![Records](docs/screenshots/de/records.png) | ![Tunnels](docs/screenshots/de/tunnels.png) | ![Webhooks](docs/screenshots/de/webhooks.png) |
+| Records | Tunnels | Erreichbarkeit | Webhooks |
+|---|---|---|---|
+| ![Records](docs/screenshots/de/records.png) | ![Tunnels](docs/screenshots/de/tunnels.png) | ![Erreichbarkeit](docs/screenshots/de/checks.png) | ![Webhooks](docs/screenshots/de/webhooks.png) |
 
 ## Schnellstart
 
@@ -84,7 +84,7 @@ Die Konfiguration erfolgt über Umgebungsvariablen in `.env`
 Intervalle, IP-Quellen und Webhooks werden in der Weboberfläche gepflegt.
 
 | Variable | Pflicht | Beschreibung |
-|---|---|---|
+|---|---|---|---|
 | `APP_PASSWORD` | ja | Passwort für die Weboberfläche (Klartext oder bcrypt-Hash, max. 72 Bytes) |
 | `CF_API_TOKEN` | für DNS/Tunnels | Cloudflare-API-Token, siehe unten |
 | `CF_ACCOUNT_ID` | für Tunnels | Cloudflare-Account-ID |
@@ -303,6 +303,9 @@ go vet ./... && go test ./...
 cd web && npm run lint && npm run build
 cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
+
+Die Bilder in `docs/screenshots` entstehen mit `cd e2e && npm run screenshots`; echte
+IP-Adressen und Anbieterdaten werden dabei durch Dokumentationswerte ersetzt.
 
 Einen lokal gebauten Container starten: `cd deploy && docker compose -f docker-compose.dev.yml up -d --build`.
 

@@ -1,0 +1,36 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Do not post secrets** (API tokens, `APP_PASSWORD`, webhook URLs or tokens).
+        Security problems: please report them privately, see [SECURITY.md](https://github.com/mrcdlm/dnsdeck/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: dnsdeck version
+      description: Shown under Settings → System, or `DNSDECK_VERSION` in your `.env`.
+      placeholder: "0.3.1"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant lines from `docker compose logs dnsdeck` (remove anything private).
+      render: text
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Host OS and architecture, reverse proxy / Cloudflare Tunnel in front, IPv6 available?
+      placeholder: "openSUSE MicroOS, arm64, behind Cloudflare Tunnel, no IPv6"

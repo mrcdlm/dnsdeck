@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -34,6 +35,9 @@ import (
 
 // version wird beim Release-Build per -ldflags "-X main.version=…" gesetzt.
 var version = "dev"
+
+// Kürzere Klartext-Passwörter werden beim Start mit einer Warnung gemeldet.
+const minPasswordLen = 12
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
@@ -165,6 +169,10 @@ func run() error {
 	probes.Notifier = dispatcher
 	probes.WarnDays = func() int { return settings.Get().TLSWarnDays }
 
+	if !strings.HasPrefix(cfg.AppPassword, "$2") && len(cfg.AppPassword) < minPasswordLen {
+		log.Warn(fmt.Sprintf("APP_PASSWORD ist kürzer als %d Zeichen – bitte ein langes, zufälliges Passwort verwenden",
+			minPasswordLen))
+	}
 	auth, err := api.NewAuth(cfg.AppPassword, st)
 	if err != nil {
 		return err

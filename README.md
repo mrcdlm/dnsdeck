@@ -47,9 +47,9 @@ container (≈ 30 MB, amd64 and arm64) with an embedded web interface and an SQL
 - **Secure by default** – runs as non-root on a distroless image; secrets only via
   environment variables; single-password login with rate limiting.
 
-| Records | Tunnels | Webhooks |
-|---|---|---|
-| ![Records](docs/screenshots/records.png) | ![Tunnels](docs/screenshots/tunnels.png) | ![Webhooks](docs/screenshots/webhooks.png) |
+| Records | Tunnels | Reachability | Webhooks |
+|---|---|---|---|
+| ![Records](docs/screenshots/records.png) | ![Tunnels](docs/screenshots/tunnels.png) | ![Reachability](docs/screenshots/checks.png) | ![Webhooks](docs/screenshots/webhooks.png) |
 
 ## Quick start
 
@@ -81,7 +81,7 @@ All configuration is done through environment variables in `.env`
 intervals, IP sources and webhooks are managed in the web interface.
 
 | Variable | Required | Description |
-|---|---|---|
+|---|---|---|---|
 | `APP_PASSWORD` | yes | Password for the web interface (plain text or bcrypt hash, max. 72 bytes) |
 | `CF_API_TOKEN` | for DNS / tunnels | Cloudflare API token, see below |
 | `CF_ACCOUNT_ID` | for tunnels | Cloudflare account ID |
@@ -290,6 +290,9 @@ go vet ./... && go test ./...
 cd web && npm run lint && npm run build
 cd e2e && npm ci && npx playwright install chromium && npx playwright test
 ```
+
+The screenshots in `docs/screenshots` are generated with `cd e2e && npm run screenshots`; real
+IP addresses and provider data are replaced by documentation values.
 
 To run a locally built container: `cd deploy && docker compose -f docker-compose.dev.yml up -d --build`.
 
