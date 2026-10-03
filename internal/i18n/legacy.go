@@ -1,6 +1,7 @@
 package i18n
 
 import (
+	"encoding/json"
 	"regexp"
 	"sort"
 	"strings"
@@ -10,6 +11,30 @@ import (
 // Versionen vor 0.2.0 haben Meldungen nur als deutschen Text gespeichert.
 // Diese Texte entsprechen den deutschen Katalogeinträgen; ParseLegacy wandelt
 // sie zurück in Code und Parameter, damit sie übersetzt angezeigt werden.
+
+// Bis 0.3.0 stand bei Verbindungsfehlern zu Cloudflare der rohe Go-Fehler samt
+// URL im Detail (Get "https://api.cloudflare.com/…": context deadline exceeded …).
+// cleanCFUnreachable kürzt solche gespeicherten Meldungen beim Anzeigen.
+var goRequestErr = regexp.MustCompile(`^[A-Za-z]+ "[^"]*": (.+)$`)
+
+func cleanCFUnreachable(m Msg) Msg {
+	raw, ok := strings.CutPrefix(m.Params["detail"], "@@")
+	if !ok {
+		return m
+	}
+	var nested Msg
+	if json.Unmarshal([]byte(raw), &nested) != nil || nested.Code != "raw" {
+		return m
+	}
+	sub := goRequestErr.FindStringSubmatch(nested.Params["text"])
+	if sub == nil {
+		return m
+	}
+	if strings.Contains(sub[1], "deadline exceeded") || strings.Contains(sub[1], "Timeout") {
+		return M("cf.timeout")
+	}
+	return M("cf.unreachable", "detail", sub[1])
+}
 
 type legacyPattern struct {
 	code    string

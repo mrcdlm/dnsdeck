@@ -121,3 +121,24 @@ func TestParseLegacy(t *testing.T) {
 		}
 	}
 }
+
+// Gespeicherte Verbindungsfehler aus Versionen bis 0.3.0 erscheinen gekürzt.
+func TestCleanCFUnreachable(t *testing.T) {
+	raw := func(s string) Msg { return M("cf.unreachable", "detail", Nest(Raw(s))) }
+	timeout := raw(`Get "https://api.cloudflare.com/client/v4/zones/abc/dns_records?name.exact=x&type=A": ` +
+		`context deadline exceeded (Client.Timeout exceeded while awaiting headers)`)
+	if got := T(DE, timeout); got != T(DE, M("cf.timeout")) {
+		t.Errorf("Zeitüberschreitung: %q", got)
+	}
+	// auch eingebettet, z. B. in „wieder erfolgreich (vorher: …)“
+	if got := T(EN, M("ddns.recovered_after", "detail", Nest(timeout))); strings.Contains(got, "https://") {
+		t.Errorf("eingebettet: %q", got)
+	}
+	refused := raw(`Get "https://api.cloudflare.com/client/v4/zones": dial tcp 1.2.3.4:443: connect: connection refused`)
+	if got := T(EN, refused); got != "Cloudflare unreachable: dial tcp 1.2.3.4:443: connect: connection refused" {
+		t.Errorf("abgelehnt: %q", got)
+	}
+	if got := T(EN, raw("tls: handshake failure")); got != "Cloudflare unreachable: tls: handshake failure" {
+		t.Errorf("unverändert: %q", got)
+	}
+}

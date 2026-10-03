@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { absoluteTime, relativeTime, useNow } from '@/lib/format'
 import { useUpdates } from '@/lib/queries'
 import { updateResultVariant } from '@/lib/records'
+import { cn } from '@/lib/utils'
 
 export function UpdateLogList({ limit, empty }: { limit: number; empty?: string }) {
   const { t } = useTranslation()
@@ -51,7 +52,12 @@ export function UpdateLogList({ limit, empty }: { limit: number; empty?: string 
             </div>
           )}
           {e.message && (
-            <p className={e.result === 'error' ? 'text-destructive text-xs break-words' : 'text-muted-foreground text-xs'}>
+            <p
+              className={cn(
+                'text-xs [overflow-wrap:anywhere]',
+                e.result === 'error' ? 'text-destructive' : 'text-muted-foreground',
+              )}
+            >
               {e.message}
             </p>
           )}

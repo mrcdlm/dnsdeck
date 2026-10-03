@@ -66,6 +66,9 @@ func T(lang Lang, m Msg) string {
 	if m.IsZero() {
 		return ""
 	}
+	if m.Code == "cf.unreachable" {
+		m = cleanCFUnreachable(m)
+	}
 	if m.Code == "join" {
 		var items []Msg
 		_ = json.Unmarshal([]byte(m.Params["items"]), &items)

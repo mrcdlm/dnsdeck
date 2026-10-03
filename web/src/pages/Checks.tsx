@@ -62,7 +62,7 @@ function Status({ probe }: { probe: Probe }) {
       {probe.message && (
         <p
           className={cn(
-            'mt-1 text-xs break-words',
+            'mt-1 text-xs [overflow-wrap:anywhere]',
             probe.status === 'down' || probe.status === 'tls_error' ? 'text-destructive' : 'text-muted-foreground',
             probe.fail_count > 0 && probe.status !== 'down' && 'text-warning',
           )}

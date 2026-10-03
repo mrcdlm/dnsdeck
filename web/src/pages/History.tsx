@@ -161,7 +161,12 @@ function UpdatesTab({ now }: { now: number }) {
               </div>
             )}
             {e.message && (
-              <p className={cn('text-xs break-words', e.result === 'error' ? 'text-destructive' : 'text-muted-foreground')}>
+              <p
+                className={cn(
+                  'text-xs [overflow-wrap:anywhere]',
+                  e.result === 'error' ? 'text-destructive' : 'text-muted-foreground',
+                )}
+              >
                 {e.message}
               </p>
             )}
