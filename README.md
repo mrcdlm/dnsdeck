@@ -85,7 +85,7 @@ intervals, IP sources and webhooks are managed in the web interface.
 | `APP_PASSWORD` | yes | Password for the web interface (plain text or bcrypt hash, max. 72 bytes) |
 | `CF_API_TOKEN` | for DNS / tunnels | Cloudflare API token, see below |
 | `CF_ACCOUNT_ID` | for tunnels | Cloudflare account ID |
-| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.3.1` – pinned on purpose, no `latest` |
+| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.3.2` – pinned on purpose, no `latest` |
 | `DNSDECK_PORT` | no | Host port for the web interface (default `8080`) |
 | `TZ` | no | Time zone for log timestamps (default `UTC`) |
 | `WEBHOOK_*` | no | Secrets referenced by webhooks, see [Notifications](#notifications) |

@@ -10,10 +10,10 @@ name: dnsdeck
 services:
   dnsdeck:
     # Pinned version from .env – intentionally no "latest"
-    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?Set DNSDECK_VERSION in .env, e.g. 0.3.1}
+    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?Set DNSDECK_VERSION in .env, e.g. 0.3.2}
     container_name: dnsdeck
     restart: unless-stopped
-    # Läuft ohne Root und braucht keine Linux-Capabilities.
+    # Runs as non-root and needs no Linux capabilities.
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     ports:

@@ -6,10 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] – 2026-10-03
+
 ### Changed
 - Docker Compose: the container drops all Linux capabilities and runs with
-  `no-new-privileges` (dnsdeck needs neither). Take over these two lines into your own
-  `docker-compose.yml` when updating.
+  `no-new-privileges` (dnsdeck needs neither). If you use your own `docker-compose.yml`,
+  add `cap_drop: [ALL]` and `security_opt: [no-new-privileges:true]` below `restart:`.
 - A warning is logged on start if a plain-text `APP_PASSWORD` is shorter than 12 characters.
 - Updated screenshots; contribution guide and issue templates.
 - GitHub releases show the changes from this changelog instead of a generic text.
@@ -84,7 +86,8 @@ First public release.
   Home Assistant; secrets referenced from environment variables.
 - Single-container deployment (distroless, non-root, amd64 and arm64) published to ghcr.io.
 
-[Unreleased]: https://github.com/mrcdlm/dnsdeck/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/mrcdlm/dnsdeck/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/mrcdlm/dnsdeck/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/mrcdlm/dnsdeck/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/mrcdlm/dnsdeck/compare/v0.2.1...v0.2.2
