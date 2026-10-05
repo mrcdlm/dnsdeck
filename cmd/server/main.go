@@ -28,6 +28,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/providers"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/scheduler"
+	"github.com/mrcdlm/dnsdeck/internal/speedtest"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 	"github.com/mrcdlm/dnsdeck/internal/tunnels"
 	"github.com/mrcdlm/dnsdeck/web"
@@ -169,6 +170,11 @@ func run() error {
 	probes.Notifier = dispatcher
 	probes.WarnDays = func() int { return settings.Get().TLSWarnDays }
 
+	// Speedtest gegen das nächstgelegene Cloudflare-Rechenzentrum (per Button
+	// oder nach Zeitplan; Standard: nur manuell).
+	speed := speedtest.NewRunner(ctx, speedtest.New(), st, log, broker)
+	speed.Interval = func() time.Duration { return settings.Get().SpeedtestInterval }
+
 	if !strings.HasPrefix(cfg.AppPassword, "$2") && len(cfg.AppPassword) < minPasswordLen {
 		log.Warn(fmt.Sprintf("APP_PASSWORD ist kürzer als %d Zeichen – bitte ein langes, zufälliges Passwort verwenden",
 			minPasswordLen))
@@ -201,6 +207,12 @@ func run() error {
 		Run:      probes.Poll,
 	})
 	sched.Add(scheduler.Job{
+		Name: "speedtest",
+		// misst nur, wenn fällig – ein Neustart löst keine zusätzliche Messung aus
+		Interval: speed.NextDelay,
+		Run:      speed.Poll,
+	})
+	sched.Add(scheduler.Job{
 		Name:     "session-cleanup",
 		Interval: func() time.Duration { return time.Hour },
 		Run: func(ctx context.Context) error {
@@ -222,7 +234,7 @@ func run() error {
 		Handler: api.NewServer(api.Deps{
 			Store: st, Tracker: tracker, DDNS: svc, Zones: zones,
 			Tunnels: monitor, Events: broker, Settings: settings,
-			Webhooks: dispatcher, WebhookEnv: os.LookupEnv, Propagation: propagation, Probes: probes,
+			Webhooks: dispatcher, WebhookEnv: os.LookupEnv, Propagation: propagation, Probes: probes, Speedtest: speed,
 			Info: api.Info{Version: version, CFTokenSet: cfg.CFAPIToken != "", CFAccountSet: cfg.CFAccountID != "",
 				DataDir: cfg.DataDir, DNSCheck: propagation != nil},
 			Auth: auth, Log: log, Static: web.Dist(),
@@ -258,6 +270,7 @@ func run() error {
 		log.Error("Shutdown", "err", err)
 	}
 	sched.Wait()
+	speed.Wait()
 	dispatcher.Wait()
 	return nil
 }

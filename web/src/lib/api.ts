@@ -250,8 +250,41 @@ export interface Settings {
   notify_language: 'de' | 'en'
   probe_interval_seconds: number
   tls_warn_days: number
+  /** 0 = nur manuell */
+  speedtest_interval_seconds: number
   ip_sources: { name: string; enabled: boolean }[]
   limits: Record<string, number>
+}
+
+/** Ergebnis einer Geschwindigkeitsmessung (speed.cloudflare.com). */
+export interface SpeedtestResult {
+  id: number
+  started_at: string
+  duration_ms: number
+  trigger: 'manual' | 'scheduled'
+  /** fehlen bei einer fehlgeschlagenen Messung (dann error gesetzt) */
+  download_mbps?: number
+  upload_mbps?: number
+  latency_ms?: number
+  jitter_ms?: number
+  /** Cloudflare-Rechenzentrum (IATA-Code), gegen das gemessen wurde */
+  colo?: string
+  /** Standort des Anschlusses laut Cloudflare */
+  city?: string
+  country?: string
+  ip?: string
+  download_bytes: number
+  upload_bytes: number
+  error?: string
+}
+
+export interface SpeedtestOverview {
+  available: boolean
+  running: boolean
+  running_since?: string
+  interval_seconds: number
+  /** neueste zuerst */
+  results: SpeedtestResult[]
 }
 
 export type WebhookMethod = 'POST' | 'PUT' | 'PATCH' | 'GET'
@@ -397,5 +430,7 @@ export const api = {
   updateProbe: (id: number, p: ProbeInput) => request<Probe>('PUT', `/api/probes/${id}`, p),
   deleteProbe: (id: number) => request<void>('DELETE', `/api/probes/${id}`),
   runProbe: (id: number) => request<Probe>('POST', `/api/probes/${id}/run`),
+  speedtest: (limit = 100) => request<SpeedtestOverview>('GET', `/api/speedtest?limit=${limit}`),
+  runSpeedtest: () => request<{ running: boolean }>('POST', '/api/speedtest/run'),
   info: () => request<Info>('GET', '/api/info'),
 }

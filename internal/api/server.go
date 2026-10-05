@@ -28,6 +28,7 @@ type dataStore interface {
 	recordStore
 	webhookStore
 	probeStore
+	ListSpeedtests(ctx context.Context, beforeID int64, limit int) ([]store.Speedtest, error)
 }
 
 type ipTracker interface {
@@ -58,10 +59,12 @@ type Deps struct {
 	Propagation PropagationChecker
 	// Probes: Erreichbarkeitsprüfungen sofort ausführen (nil = nur speichern)
 	Probes ProbeRunner
-	Info   Info
-	Auth   *Auth
-	Log    *slog.Logger
-	Static fs.FS
+	// Speedtest: Geschwindigkeitsmessung (nil = nicht verfügbar)
+	Speedtest SpeedtestRunner
+	Info      Info
+	Auth      *Auth
+	Log       *slog.Logger
+	Static    fs.FS
 }
 
 type Server struct {
@@ -76,6 +79,7 @@ type Server struct {
 	webhookEnv  notify.Env
 	propagation PropagationChecker
 	probes      ProbeRunner
+	speedtest   SpeedtestRunner
 	info        Info
 	auth        *Auth
 	log         *slog.Logger
@@ -85,7 +89,7 @@ type Server struct {
 func NewServer(d Deps) *Server {
 	return &Server{store: d.Store, tracker: d.Tracker, ddns: d.DDNS, zones: d.Zones,
 		tunnels: d.Tunnels, events: d.Events, settings: d.Settings, webhooks: d.Webhooks,
-		webhookEnv: d.WebhookEnv, propagation: d.Propagation, probes: d.Probes, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
+		webhookEnv: d.WebhookEnv, propagation: d.Propagation, probes: d.Probes, speedtest: d.Speedtest, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -135,6 +139,8 @@ func (s *Server) Routes() http.Handler {
 			r.Put("/probes/{id}", s.handleUpdateProbe)
 			r.Delete("/probes/{id}", s.handleDeleteProbe)
 			r.Post("/probes/{id}/run", s.handleRunProbe)
+			r.Get("/speedtest", s.handleSpeedtest)
+			r.Post("/speedtest/run", s.handleRunSpeedtest)
 			r.Get("/info", s.handleInfo)
 		})
 

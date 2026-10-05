@@ -15,10 +15,11 @@ import (
 
 // Obergrenzen für Intervalle (Untergrenzen siehe Min*).
 const (
-	MaxIPCheckInterval = 24 * time.Hour
-	MaxTunnelInterval  = time.Hour
-	MaxProbeInterval   = 24 * time.Hour
-	MinIPSources       = 2 // Mehrheitsentscheid braucht mindestens zwei Quellen
+	MaxIPCheckInterval   = 24 * time.Hour
+	MaxTunnelInterval    = time.Hour
+	MaxProbeInterval     = 24 * time.Hour
+	MaxSpeedtestInterval = 7 * 24 * time.Hour
+	MinIPSources         = 2 // Mehrheitsentscheid braucht mindestens zwei Quellen
 )
 
 type settingsRW interface {
@@ -89,6 +90,7 @@ func (s *SettingsService) Update(ctx context.Context, next Settings) (Settings, 
 		{KeyNotifyLanguage, next.NotifyLanguage},
 		{KeyProbeInterval, next.ProbeInterval.String()},
 		{KeyTLSWarnDays, strconv.Itoa(next.TLSWarnDays)},
+		{KeySpeedtestInterval, next.SpeedtestInterval.String()},
 	} {
 		if err := s.store.SetSetting(ctx, kv[0], kv[1]); err != nil {
 			return Settings{}, err
@@ -120,6 +122,9 @@ func (s *SettingsService) validate(n Settings) error {
 	}
 	if n.TLSWarnDays < MinTLSWarnDays || n.TLSWarnDays > MaxTLSWarnDays {
 		add("settings.tls_warn_days_range", "min", strconv.Itoa(MinTLSWarnDays), "max", strconv.Itoa(MaxTLSWarnDays))
+	}
+	if d := n.SpeedtestInterval; d != 0 && (d < MinSpeedtestInterval || d > MaxSpeedtestInterval) {
+		add("settings.speedtest_interval_range", "min", MinSpeedtestInterval.String(), "max", MaxSpeedtestInterval.String())
 	}
 	seen := map[string]bool{}
 	for _, name := range n.IPSources {

@@ -15,7 +15,8 @@
     "tunnels": "Tunnels",
     "history": "Verlauf",
     "settings": "Einstellungen",
-    "checks": "Erreichbarkeit"
+    "checks": "Erreichbarkeit",
+    "speedtest": "Speedtest"
   },
   "live": {
     "on": "Live",
@@ -64,7 +65,9 @@
     "minutes_one": "{{count}} Minute",
     "minutes_other": "{{count}} Minuten",
     "hours_one": "{{count}} Stunde",
-    "hours_other": "{{count}} Stunden"
+    "hours_other": "{{count}} Stunden",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage"
   },
   "ip": {
     "title": "Öffentliche IP",
@@ -131,7 +134,11 @@
     "noChecks": "Keine Prüfungen",
     "reachable": "{{count}} erreichbar",
     "certExpiring": "{{count}} Zertifikat läuft ab",
-    "problems": "{{count}} gestört"
+    "problems": "{{count}} gestört",
+    "speedtest": "Speedtest",
+    "noSpeedtest": "Noch keine Messung",
+    "speedtestRunning": "Messung läuft …",
+    "speedtestFailed": "Letzte Messung fehlgeschlagen"
   },
   "record": {
     "status": {
@@ -312,7 +319,10 @@
     "tlsWarnDays": "Vor Zertifikatsablauf warnen",
     "tlsWarnDaysHint": "Restlaufzeit, ab der ein Zertifikat als „läuft ab“ gilt und gemeldet wird.",
     "days_one": "{{count}} Tag",
-    "days_other": "{{count}} Tage"
+    "days_other": "{{count}} Tage",
+    "speedtestInterval": "Speedtest automatisch",
+    "speedtestIntervalHint": "Misst gegen das nächstgelegene Cloudflare-Rechenzentrum. Jede Messung überträgt je nach Anschluss einige hundert MB.",
+    "speedtestOff": "Aus (nur manuell)"
   },
   "events": {
     "ip_change": {
@@ -484,6 +494,45 @@
       "tls_error": "Zertifikat ungültig",
       "down": "Nicht erreichbar",
       "paused": "Pausiert"
+    }
+  },
+  "speedtest": {
+    "subtitle": "Download, Upload und Ping – gemessen gegen das nächstgelegene Cloudflare-Rechenzentrum",
+    "run": "Jetzt messen",
+    "running": "Messung läuft …",
+    "runningHint": "Dauert etwa 20 Sekunden. Ping, dann Download, dann Upload.",
+    "unavailable": "Speedtest ist auf diesem Server nicht verfügbar.",
+    "loadError": "Messungen konnten nicht geladen werden: {{error}}",
+    "latest": "Letzte Messung",
+    "empty": "Noch keine Messung – starte die erste mit „Jetzt messen“.",
+    "download": "Download",
+    "upload": "Upload",
+    "latency": "Ping",
+    "jitter": "Jitter",
+    "mbps": "Mbit/s",
+    "ms": "ms",
+    "location": "Dein Standort laut Cloudflare: {{place}}",
+    "server": "Gemessen über Cloudflare {{colo}}",
+    "serverHint": "Cloudflare-Rechenzentrum (Flughafencode). Cloudflare wählt per Anycast automatisch das nächstgelegene.",
+    "via": "über {{ip}}",
+    "failed": "Messung fehlgeschlagen",
+    "schedule": "Automatisch alle {{interval}}",
+    "scheduleOff": "Nur manuell",
+    "scheduleChange": "Ändern",
+    "history": "Verlauf",
+    "historyHint": "Die letzten {{count}} Messungen",
+    "throughput": "Datenrate",
+    "latencyChart": "Ping",
+    "chartTooFew": "Für den Verlauf werden mindestens zwei erfolgreiche Messungen gebraucht.",
+    "chartLabel": "Verlauf von Download und Upload in Mbit/s",
+    "latencyChartLabel": "Verlauf des Pings in Millisekunden",
+    "table": "Alle Messungen",
+    "time": "Zeitpunkt",
+    "serverCol": "Server",
+    "data": "Daten",
+    "trigger": {
+      "manual": "manuell",
+      "scheduled": "geplant"
     }
   }
 }

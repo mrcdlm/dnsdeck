@@ -15,7 +15,8 @@
     "tunnels": "Tunnels",
     "history": "History",
     "settings": "Settings",
-    "checks": "Reachability"
+    "checks": "Reachability",
+    "speedtest": "Speed test"
   },
   "live": {
     "on": "Live",
@@ -64,7 +65,9 @@
     "minutes_one": "{{count}} minute",
     "minutes_other": "{{count}} minutes",
     "hours_one": "{{count}} hour",
-    "hours_other": "{{count}} hours"
+    "hours_other": "{{count}} hours",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days"
   },
   "ip": {
     "title": "Public IP",
@@ -131,7 +134,11 @@
     "noChecks": "No checks",
     "reachable": "{{count}} reachable",
     "certExpiring": "{{count}} certificate expiring",
-    "problems": "{{count}} failing"
+    "problems": "{{count}} failing",
+    "speedtest": "Speed test",
+    "noSpeedtest": "No measurement yet",
+    "speedtestRunning": "Measuring …",
+    "speedtestFailed": "Last measurement failed"
   },
   "record": {
     "status": {
@@ -312,7 +319,10 @@
     "tlsWarnDays": "Warn before certificates expire",
     "tlsWarnDaysHint": "Remaining validity at which a certificate counts as “expiring” and is reported.",
     "days_one": "{{count}} day",
-    "days_other": "{{count}} days"
+    "days_other": "{{count}} days",
+    "speedtestInterval": "Automatic speed test",
+    "speedtestIntervalHint": "Measures against the nearest Cloudflare data center. Each run transfers a few hundred MB depending on your connection.",
+    "speedtestOff": "Off (manual only)"
   },
   "events": {
     "ip_change": {
@@ -484,6 +494,45 @@
       "tls_error": "Certificate invalid",
       "down": "Unreachable",
       "paused": "Paused"
+    }
+  },
+  "speedtest": {
+    "subtitle": "Download, upload and ping – measured against the nearest Cloudflare data center",
+    "run": "Measure now",
+    "running": "Measuring …",
+    "runningHint": "Takes about 20 seconds. Ping, then download, then upload.",
+    "unavailable": "The speed test is not available on this server.",
+    "loadError": "Could not load measurements: {{error}}",
+    "latest": "Latest measurement",
+    "empty": "No measurement yet – start the first one with “Measure now”.",
+    "download": "Download",
+    "upload": "Upload",
+    "latency": "Ping",
+    "jitter": "Jitter",
+    "mbps": "Mbit/s",
+    "ms": "ms",
+    "location": "Your location according to Cloudflare: {{place}}",
+    "server": "Measured via Cloudflare {{colo}}",
+    "serverHint": "Cloudflare data center (airport code). Cloudflare picks the nearest one automatically via anycast.",
+    "via": "via {{ip}}",
+    "failed": "Measurement failed",
+    "schedule": "Automatically every {{interval}}",
+    "scheduleOff": "Manual only",
+    "scheduleChange": "Change",
+    "history": "History",
+    "historyHint": "The last {{count}} measurements",
+    "throughput": "Throughput",
+    "latencyChart": "Ping",
+    "chartTooFew": "The history needs at least two successful measurements.",
+    "chartLabel": "Download and upload over time in Mbit/s",
+    "latencyChartLabel": "Ping over time in milliseconds",
+    "table": "All measurements",
+    "time": "Time",
+    "serverCol": "Server",
+    "data": "Data",
+    "trigger": {
+      "manual": "manual",
+      "scheduled": "scheduled"
     }
   }
 }

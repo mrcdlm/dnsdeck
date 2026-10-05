@@ -23,6 +23,7 @@ import (
 	"github.com/mrcdlm/dnsdeck/internal/probe"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare"
 	"github.com/mrcdlm/dnsdeck/internal/providers/cloudflare/cftest"
+	"github.com/mrcdlm/dnsdeck/internal/speedtest"
 	"github.com/mrcdlm/dnsdeck/internal/store"
 	"github.com/mrcdlm/dnsdeck/internal/tunnels"
 )
@@ -50,15 +51,17 @@ func (f *fakeDDNS) SyncRecord(ctx context.Context, id int64, trigger string) (st
 }
 
 type testEnv struct {
-	srv      *httptest.Server
-	api      *Server
-	tracker  *fakeDDNS
-	auth     *Auth
-	cf       *cftest.Fake
-	broker   *events.Broker
-	hooks    *atomic.Int32 // Aufrufe des Test-Webhook-Empfängers
-	hookURL  string        // Adresse des Test-Webhook-Empfängers
-	language string        // Accept-Language der Anfragen (Standard "de")
+	srv       *httptest.Server
+	api       *Server
+	tracker   *fakeDDNS
+	auth      *Auth
+	cf        *cftest.Fake
+	broker    *events.Broker
+	hooks     *atomic.Int32 // Aufrufe des Test-Webhook-Empfängers
+	hookURL   string        // Adresse des Test-Webhook-Empfängers
+	language  string        // Accept-Language der Anfragen (Standard "de")
+	speed     *speedtest.Runner
+	speedFake *fakeSpeed
 }
 
 func (e *testEnv) lang() string {
@@ -110,13 +113,16 @@ func newTestEnv(t *testing.T, static fstest.MapFS) *testEnv {
 	}
 	disp := notify.NewDispatcher(st, env, log)
 	probes := probe.NewMonitor(st, fakeChecker{}, log, broker)
+	speedFake := &fakeSpeed{}
+	speed := speedtest.NewRunner(t.Context(), speedFake, st, log, broker)
+	speed.Interval = func() time.Duration { return settings.Get().SpeedtestInterval }
 
 	s := NewServer(Deps{Store: st, Tracker: fakeTracker{}, DDNS: dd, Zones: cf,
-		Tunnels: mon, Events: broker, Settings: settings, Webhooks: disp, WebhookEnv: env, Probes: probes,
+		Tunnels: mon, Events: broker, Settings: settings, Webhooks: disp, WebhookEnv: env, Probes: probes, Speedtest: speed,
 		Info: Info{Version: "v1.2.3", CFTokenSet: true}, Auth: auth, Log: log, Static: static})
 	srv := httptest.NewServer(s.Routes())
 	t.Cleanup(srv.Close)
-	return &testEnv{srv: srv, api: s, tracker: dd, auth: auth, cf: fake, broker: broker, hooks: hooks, hookURL: hookSrv.URL}
+	return &testEnv{srv: srv, api: s, tracker: dd, auth: auth, cf: fake, broker: broker, hooks: hooks, hookURL: hookSrv.URL, speed: speed, speedFake: speedFake}
 }
 
 func (e *testEnv) do(t *testing.T, method, path, body string, cookie *http.Cookie) *http.Response {

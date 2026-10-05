@@ -67,3 +67,34 @@ func TestSettingsService(t *testing.T) {
 		}
 	}
 }
+
+func TestSpeedtestInterval(t *testing.T) {
+	ctx := context.Background()
+	st := memSettings{}
+	svc, _ := NewSettingsService(ctx, st, names)
+	if svc.Get().SpeedtestInterval != 0 {
+		t.Fatalf("Default nicht aus: %v", svc.Get().SpeedtestInterval)
+	}
+	next := svc.Get()
+	next.IPSources = []string{"ipify", "cloudflare"}
+	for _, bad := range []time.Duration{time.Minute, 8 * 24 * time.Hour} {
+		next.SpeedtestInterval = bad
+		if _, err := svc.Update(ctx, next); !IsValidation(err) {
+			t.Errorf("%v: Validierungsfehler erwartet, got %v", bad, err)
+		}
+	}
+	next.SpeedtestInterval = 6 * time.Hour
+	if _, err := svc.Update(ctx, next); err != nil {
+		t.Fatal(err)
+	}
+	if s, w := LoadSettings(ctx, st); len(w) != 0 || s.SpeedtestInterval != 6*time.Hour {
+		t.Fatalf("neu geladen: %v %v", s.SpeedtestInterval, w)
+	}
+	next.SpeedtestInterval = 0
+	if _, err := svc.Update(ctx, next); err != nil || st[KeySpeedtestInterval] != "0s" {
+		t.Fatalf("abschalten: %v %q", err, st[KeySpeedtestInterval])
+	}
+	if s, w := LoadSettings(ctx, st); len(w) != 0 || s.SpeedtestInterval != 0 {
+		t.Fatalf("aus neu geladen: %v %v", s.SpeedtestInterval, w)
+	}
+}

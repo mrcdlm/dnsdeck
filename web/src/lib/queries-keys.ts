@@ -9,5 +9,6 @@ export const keys = {
   settings: ['settings'] as const,
   webhooks: ['webhooks'] as const,
   probes: ['probes'] as const,
+  speedtest: ['speedtest'] as const,
   info: ['info'] as const,
 }

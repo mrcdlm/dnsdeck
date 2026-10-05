@@ -13,12 +13,13 @@ import (
 
 // Keys der in der DB gespeicherten Einstellungen.
 const (
-	KeyIPCheckInterval = "ip_check_interval"
-	KeyIPSources       = "ip_sources"
-	KeyTunnelInterval  = "tunnel_poll_interval"
-	KeyNotifyLanguage  = "notify_language"
-	KeyProbeInterval   = "probe_interval"
-	KeyTLSWarnDays     = "tls_warn_days"
+	KeyIPCheckInterval   = "ip_check_interval"
+	KeyIPSources         = "ip_sources"
+	KeyTunnelInterval    = "tunnel_poll_interval"
+	KeyNotifyLanguage    = "notify_language"
+	KeyProbeInterval     = "probe_interval"
+	KeyTLSWarnDays       = "tls_warn_days"
+	KeySpeedtestInterval = "speedtest_interval"
 )
 
 const (
@@ -34,6 +35,10 @@ const (
 	DefaultTLSWarnDays = 14
 	MinTLSWarnDays     = 1
 	MaxTLSWarnDays     = 90
+
+	// Speedtest: 0 = nur manuell (Default); jede Messung überträgt je nach
+	// Anschluss einige hundert MB, daher höchstens stündlich.
+	MinSpeedtestInterval = time.Hour
 )
 
 // Settings sind zur Laufzeit änderbare Einstellungen (keine Secrets).
@@ -50,6 +55,8 @@ type Settings struct {
 	ProbeInterval time.Duration
 	// TLSWarnDays: ab dieser Restlaufzeit (Tage) wird vor Zertifikaten gewarnt.
 	TLSWarnDays int
+	// SpeedtestInterval: Abstand geplanter Speedtests; 0 = nur manuell.
+	SpeedtestInterval time.Duration
 }
 
 // DefaultNotifyLanguage ist die Standardsprache der Benachrichtigungen.
@@ -115,6 +122,17 @@ func LoadSettings(ctx context.Context, s settingsStore) (Settings, []error) {
 			warnings = append(warnings, fmt.Errorf("%s invalid (%q), using default", KeyTLSWarnDays, v))
 		} else {
 			out.TLSWarnDays = n
+		}
+	} else if !errors.Is(err, store.ErrNotFound) {
+		warnings = append(warnings, err)
+	}
+
+	if v, err := s.GetSetting(ctx, KeySpeedtestInterval); err == nil {
+		d, perr := time.ParseDuration(v)
+		if perr != nil || (d != 0 && (d < MinSpeedtestInterval || d > MaxSpeedtestInterval)) {
+			warnings = append(warnings, fmt.Errorf("%s invalid (%q), using default", KeySpeedtestInterval, v))
+		} else {
+			out.SpeedtestInterval = d
 		}
 	} else if !errors.Is(err, store.ErrNotFound) {
 		warnings = append(warnings, err)

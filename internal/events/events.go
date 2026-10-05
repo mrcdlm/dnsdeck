@@ -8,13 +8,14 @@ import "sync"
 
 // Themen, auf die das Frontend reagiert.
 const (
-	TopicIP       = "ip"
-	TopicRecords  = "records"
-	TopicUpdates  = "updates"
-	TopicTunnels  = "tunnels"
-	TopicSettings = "settings"
-	TopicWebhooks = "webhooks"
-	TopicProbes   = "probes"
+	TopicIP        = "ip"
+	TopicRecords   = "records"
+	TopicUpdates   = "updates"
+	TopicTunnels   = "tunnels"
+	TopicSettings  = "settings"
+	TopicWebhooks  = "webhooks"
+	TopicProbes    = "probes"
+	TopicSpeedtest = "speedtest"
 )
 
 // Publisher ist das, was Produzenten von Ereignissen brauchen. Ein nil-Publisher

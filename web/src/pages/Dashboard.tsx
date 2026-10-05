@@ -1,11 +1,15 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Building2,
   ChevronRight,
+  Gauge,
   Globe,
   ListTree,
+  Loader2,
   Network,
   RefreshCw,
   ShieldAlert,
@@ -24,7 +28,8 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Blocklist, BlocklistStatus, Family, FamilyState, ISPInfo } from '@/lib/api'
 import { absoluteTime, countryName, relativeTime, useNow } from '@/lib/format'
-import { useIP, useIPHistory, useProbes, useRecords, useRefreshIP, useTunnels } from '@/lib/queries'
+import { useIP, useIPHistory, useProbes, useRecords, useRefreshIP, useSpeedtest, useTunnels } from '@/lib/queries'
+import { formatMbps, formatMs, succeeded } from '@/lib/speedtest'
 import { cn } from '@/lib/utils'
 
 const familyLabel: Record<Family, string> = { ipv4: 'IPv4', ipv6: 'IPv6' }
@@ -400,6 +405,61 @@ function ChecksTile() {
   )
 }
 
+function SpeedtestTile() {
+  const { t } = useTranslation()
+  const now = useNow()
+  const speed = useSpeedtest(1)
+  const o = speed.data
+  const last = o?.results[0]
+
+  return (
+    <Link
+      to="/speedtest"
+      className="group bg-card hover:bg-accent/40 flex items-center gap-4 rounded-xl border p-5 transition-colors"
+    >
+      <span className="bg-muted grid size-10 shrink-0 place-items-center rounded-lg">
+        <Gauge className="size-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-muted-foreground text-sm">{t('dashboard.speedtest')}</div>
+        {speed.isPending ? (
+          <Skeleton className="mt-1 h-6 w-32" />
+        ) : o?.running ? (
+          <div className="flex items-center gap-2 font-medium">
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            {t('dashboard.speedtestRunning')}
+          </div>
+        ) : !last ? (
+          <div className="font-medium">{t('dashboard.noSpeedtest')}</div>
+        ) : !succeeded(last) ? (
+          <div className="text-destructive font-medium">{t('dashboard.speedtestFailed')}</div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-medium tabular-nums">
+            <span className="flex items-center gap-1" title={t('speedtest.download')}>
+              <ArrowDown className="text-chart-download size-4" aria-label={t('speedtest.download')} />
+              {formatMbps(last.download_mbps!)}
+            </span>
+            <span className="flex items-center gap-1" title={t('speedtest.upload')}>
+              <ArrowUp className="text-chart-upload size-4" aria-label={t('speedtest.upload')} />
+              {formatMbps(last.upload_mbps!)}
+            </span>
+            <span className="text-muted-foreground text-sm font-normal">
+              {t('speedtest.mbps')} · {formatMs(last.latency_ms!)} {t('speedtest.ms')}
+            </span>
+          </div>
+        )}
+        {last && !o?.running && (
+          <div className="text-muted-foreground mt-1 text-xs" title={absoluteTime(last.started_at)}>
+            {relativeTime(last.started_at, now)}
+            {last.colo && ` · Cloudflare ${last.colo}`}
+          </div>
+        )}
+      </div>
+      <ChevronRight className="text-muted-foreground size-4 transition-transform group-hover:translate-x-0.5" />
+    </Link>
+  )
+}
+
 export function Dashboard() {
   const { t } = useTranslation()
   return (
@@ -409,10 +469,11 @@ export function Dashboard() {
         <p className="text-muted-foreground text-sm">{t('dashboard.subtitle')}</p>
       </div>
       <IPCard />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <RecordsTile />
         <TunnelsTile />
         <ChecksTile />
+        <SpeedtestTile />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <IPChangesCard />

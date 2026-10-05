@@ -1,4 +1,4 @@
-import { Activity, History, LayoutDashboard, ListTree, LogOut, Network, Settings, type LucideIcon } from 'lucide-react'
+import { Activity, Gauge, History, LayoutDashboard, ListTree, LogOut, Network, Settings, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet } from 'react-router'
 
@@ -10,13 +10,14 @@ import { useLive } from '@/lib/live-context'
 import { useLogout } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
-type NavKey = 'dashboard' | 'records' | 'tunnels' | 'checks' | 'history' | 'settings'
+type NavKey = 'dashboard' | 'records' | 'tunnels' | 'checks' | 'speedtest' | 'history' | 'settings'
 
 const nav: { to: string; key: NavKey; icon: LucideIcon }[] = [
   { to: '/', key: 'dashboard', icon: LayoutDashboard },
   { to: '/records', key: 'records', icon: ListTree },
   { to: '/tunnels', key: 'tunnels', icon: Network },
   { to: '/erreichbarkeit', key: 'checks', icon: Activity },
+  { to: '/speedtest', key: 'speedtest', icon: Gauge },
   { to: '/verlauf', key: 'history', icon: History },
   { to: '/einstellungen', key: 'settings', icon: Settings },
 ]

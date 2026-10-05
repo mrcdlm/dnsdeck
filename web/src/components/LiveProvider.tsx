@@ -13,6 +13,7 @@ const topicKeys: Record<string, readonly (readonly string[])[]> = {
   settings: [keys.settings],
   webhooks: [keys.webhooks],
   probes: [keys.probes],
+  speedtest: [keys.speedtest],
 }
 
 /**

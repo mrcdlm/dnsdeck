@@ -47,12 +47,15 @@ import {
   useTestWebhook,
   useWebhooks,
 } from '@/lib/queries'
+import { formatInterval } from '@/lib/speedtest'
 import { webhookInput } from '@/lib/webhooks'
 
 const ipIntervals = [60, 120, 300, 600, 900, 1800, 3600]
 const tunnelIntervals = [30, 60, 120, 300, 600]
 const probeIntervals = [60, 120, 300, 600, 900, 1800, 3600]
 const warnDayOptions = [7, 14, 21, 30, 60]
+// 0 = nur manuell
+const speedtestIntervals = [0, 3600, 3 * 3600, 6 * 3600, 12 * 3600, 86400, 7 * 86400]
 
 const sourceInfo: Record<string, string> = {
   cloudflare: 'Cloudflare (1.1.1.1/cdn-cgi/trace)',
@@ -196,6 +199,30 @@ function SettingsForm({
             presets={probeIntervals}
             onChange={(v) => update({ probe_interval_seconds: v })}
           />
+        </SettingRow>
+        <SettingRow
+          id="speedtest-interval"
+          label={t('settings.speedtestInterval')}
+          hint={t('settings.speedtestIntervalHint')}
+        >
+          <Select
+            value={String(draft.speedtest_interval_seconds)}
+            onValueChange={(v) => update({ speedtest_interval_seconds: Number(v) })}
+          >
+            <SelectTrigger id="speedtest-interval" className="w-full sm:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(speedtestIntervals.includes(draft.speedtest_interval_seconds)
+                ? speedtestIntervals
+                : [...speedtestIntervals, draft.speedtest_interval_seconds].sort((a, b) => a - b)
+              ).map((s) => (
+                <SelectItem key={s} value={String(s)}>
+                  {s === 0 ? t('settings.speedtestOff') : formatInterval(t, s)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </SettingRow>
         <SettingRow id="tls-warn-days" label={t('settings.tlsWarnDays')} hint={t('settings.tlsWarnDaysHint')}>
           <Select

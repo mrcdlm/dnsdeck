@@ -34,6 +34,8 @@ container (≈ 30 MB, amd64 and arm64) with an embedded web interface and an SQL
   versions and 24 h / 7 day uptime per tunnel.
 - **Reachability and certificates** – checks your own services over HTTP(S) (per record with
   one switch, or any URL), reports outages and warns before TLS certificates expire.
+- **Speed test** – measures download, upload, ping and jitter against the nearest Cloudflare
+  data center (anycast, so always close to you); on demand or on a schedule, with history chart.
 - **Live dashboard** – updates instantly via Server-Sent Events, works on mobile; light and
   dark mode following the system setting; English and German.
 - **Blocklist check** – shows whether your public IPv4 is on a spam blocklist (Spamhaus,
@@ -85,7 +87,7 @@ intervals, IP sources and webhooks are managed in the web interface.
 | `APP_PASSWORD` | yes | Password for the web interface (plain text or bcrypt hash, max. 72 bytes) |
 | `CF_API_TOKEN` | for DNS / tunnels | Cloudflare API token, see below |
 | `CF_ACCOUNT_ID` | for tunnels | Cloudflare account ID |
-| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.3.2` – pinned on purpose, no `latest` |
+| `DNSDECK_VERSION` | yes (Compose) | Image version to run, e.g. `0.4.0` – pinned on purpose, no `latest` |
 | `DNSDECK_PORT` | no | Host port for the web interface (default `8080`) |
 | `TZ` | no | Time zone for log timestamps (default `UTC`) |
 | `WEBHOOK_*` | no | Secrets referenced by webhooks, see [Notifications](#notifications) |
@@ -175,6 +177,20 @@ on **Check reachability** in its dialog (checks `https://<name>/`), or add any `
 - Checks run from inside the container. Addresses **not** routed through Cloudflare (DNS only)
   can be unreachable from your own network even though they work from outside, if your router
   lacks NAT loopback (hairpin NAT). Proxied records and tunnel hostnames are not affected.
+
+## Speed test
+
+Under **Speed test** dnsdeck measures your connection against `speed.cloudflare.com`. Cloudflare
+answers via anycast from the data center closest to you, so the test never runs abroad unless
+you are. Each result shows the data center (airport code, e.g. `FRA`) and your location as
+Cloudflare sees it.
+
+- **Measure now** runs a test in the background (about 20 seconds: ping, then download, then
+  upload, each over several parallel connections). Only one test runs at a time.
+- Automatic tests are **off by default**; under **Settings** choose an interval between 1 hour
+  and 7 days. A restart does not trigger an extra test – dnsdeck waits until the next one is due.
+- Each test transfers a few hundred MB depending on your connection speed – keep that in mind on
+  metered lines. Results are kept for one year.
 
 ## Languages and appearance
 

@@ -36,6 +36,8 @@ eingebauter Weboberfläche und SQLite-Datenbank.
   Client-Versionen und Uptime über 24 Stunden bzw. 7 Tage je Tunnel.
 - **Erreichbarkeit und Zertifikate** – prüft eigene Dienste per HTTP(S) (je Record mit einem
   Schalter oder beliebige Adressen), meldet Ausfälle und warnt vor ablaufenden TLS-Zertifikaten.
+- **Speedtest** – misst Download, Upload, Ping und Jitter gegen das nächstgelegene
+  Cloudflare-Rechenzentrum (Anycast, also immer in deiner Nähe); per Knopf oder nach Zeitplan, mit Verlaufsdiagramm.
 - **Live-Dashboard** – aktualisiert sich sofort per Server-Sent Events, mobil nutzbar; heller
   und dunkler Modus nach Systemeinstellung; Deutsch und Englisch.
 - **Sperrlisten-Check** – zeigt, ob die öffentliche IPv4 auf einer Spam-Sperrliste steht
@@ -88,7 +90,7 @@ Intervalle, IP-Quellen und Webhooks werden in der Weboberfläche gepflegt.
 | `APP_PASSWORD` | ja | Passwort für die Weboberfläche (Klartext oder bcrypt-Hash, max. 72 Bytes) |
 | `CF_API_TOKEN` | für DNS/Tunnels | Cloudflare-API-Token, siehe unten |
 | `CF_ACCOUNT_ID` | für Tunnels | Cloudflare-Account-ID |
-| `DNSDECK_VERSION` | ja (Compose) | Zu startende Image-Version, z. B. `0.3.2` – bewusst fest, kein `latest` |
+| `DNSDECK_VERSION` | ja (Compose) | Zu startende Image-Version, z. B. `0.4.0` – bewusst fest, kein `latest` |
 | `DNSDECK_PORT` | nein | Port auf dem Host für die Weboberfläche (Standard `8080`) |
 | `TZ` | nein | Zeitzone für Log-Zeitstempel (Standard `UTC`) |
 | `WEBHOOK_*` | nein | Geheimnisse für Webhooks, siehe [Benachrichtigungen](#benachrichtigungen) |
@@ -183,6 +185,21 @@ sich beliebige `http://`- oder `https://`-Adressen eintragen, auch interne.
   sind aus dem eigenen Netz manchmal nicht erreichbar, obwohl sie es von außen sind – wenn der
   Router kein NAT-Loopback (Hairpin-NAT) beherrscht. Proxied Records und Tunnel-Hostnames sind
   davon nicht betroffen.
+
+## Speedtest
+
+Unter **Speedtest** misst dnsdeck deinen Anschluss gegen `speed.cloudflare.com`. Cloudflare
+antwortet per Anycast aus dem nächstgelegenen Rechenzentrum – gemessen wird also nicht ins
+Ausland, solange du nicht selbst dort bist. Zu jedem Ergebnis stehen das Rechenzentrum
+(Flughafencode, z. B. `FRA`) und dein Standort, wie Cloudflare ihn sieht.
+
+- **Jetzt messen** startet eine Messung im Hintergrund (etwa 20 Sekunden: Ping, dann Download,
+  dann Upload, jeweils über mehrere parallele Verbindungen). Es läuft immer nur eine Messung.
+- Automatische Messungen sind **standardmäßig aus**; unter **Einstellungen** ein Intervall zwischen
+  1 Stunde und 7 Tagen wählen. Ein Neustart löst keine zusätzliche Messung aus – dnsdeck wartet,
+  bis die nächste fällig ist.
+- Jede Messung überträgt je nach Anschluss einige hundert MB – bei Volumentarifen beachten.
+  Ergebnisse werden ein Jahr lang aufbewahrt.
 
 ## Sprache und Darstellung
 

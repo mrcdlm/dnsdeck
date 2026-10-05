@@ -33,13 +33,14 @@ type ipSourceDTO struct {
 }
 
 type settingsDTO struct {
-	IPCheckIntervalSeconds int            `json:"ip_check_interval_seconds"`
-	TunnelIntervalSeconds  int            `json:"tunnel_interval_seconds"`
-	IPSources              []ipSourceDTO  `json:"ip_sources"` // Reihenfolge = Priorität
-	NotifyLanguage         string         `json:"notify_language"`
-	ProbeIntervalSeconds   int            `json:"probe_interval_seconds"`
-	TLSWarnDays            int            `json:"tls_warn_days"`
-	Limits                 map[string]int `json:"limits"`
+	IPCheckIntervalSeconds   int            `json:"ip_check_interval_seconds"`
+	TunnelIntervalSeconds    int            `json:"tunnel_interval_seconds"`
+	IPSources                []ipSourceDTO  `json:"ip_sources"` // Reihenfolge = Priorität
+	NotifyLanguage           string         `json:"notify_language"`
+	ProbeIntervalSeconds     int            `json:"probe_interval_seconds"`
+	TLSWarnDays              int            `json:"tls_warn_days"`
+	SpeedtestIntervalSeconds int            `json:"speedtest_interval_seconds"` // 0 = nur manuell
+	Limits                   map[string]int `json:"limits"`
 }
 
 func (s *Server) settingsToDTO(c config.Settings) settingsDTO {
@@ -55,22 +56,25 @@ func (s *Server) settingsToDTO(c config.Settings) settingsDTO {
 		}
 	}
 	return settingsDTO{
-		IPCheckIntervalSeconds: int(c.IPCheckInterval.Seconds()),
-		TunnelIntervalSeconds:  int(c.TunnelInterval.Seconds()),
-		IPSources:              sources,
-		NotifyLanguage:         c.NotifyLanguage,
-		ProbeIntervalSeconds:   int(c.ProbeInterval.Seconds()),
-		TLSWarnDays:            c.TLSWarnDays,
+		IPCheckIntervalSeconds:   int(c.IPCheckInterval.Seconds()),
+		TunnelIntervalSeconds:    int(c.TunnelInterval.Seconds()),
+		IPSources:                sources,
+		NotifyLanguage:           c.NotifyLanguage,
+		ProbeIntervalSeconds:     int(c.ProbeInterval.Seconds()),
+		TLSWarnDays:              c.TLSWarnDays,
+		SpeedtestIntervalSeconds: int(c.SpeedtestInterval.Seconds()),
 		Limits: map[string]int{
-			"ip_check_interval_min": int(config.MinIPCheckInterval.Seconds()),
-			"ip_check_interval_max": int(config.MaxIPCheckInterval.Seconds()),
-			"tunnel_interval_min":   int(config.MinTunnelInterval.Seconds()),
-			"tunnel_interval_max":   int(config.MaxTunnelInterval.Seconds()),
-			"ip_sources_min":        config.MinIPSources,
-			"probe_interval_min":    int(config.MinProbeInterval.Seconds()),
-			"probe_interval_max":    int(config.MaxProbeInterval.Seconds()),
-			"tls_warn_days_min":     config.MinTLSWarnDays,
-			"tls_warn_days_max":     config.MaxTLSWarnDays,
+			"ip_check_interval_min":  int(config.MinIPCheckInterval.Seconds()),
+			"ip_check_interval_max":  int(config.MaxIPCheckInterval.Seconds()),
+			"tunnel_interval_min":    int(config.MinTunnelInterval.Seconds()),
+			"tunnel_interval_max":    int(config.MaxTunnelInterval.Seconds()),
+			"ip_sources_min":         config.MinIPSources,
+			"probe_interval_min":     int(config.MinProbeInterval.Seconds()),
+			"probe_interval_max":     int(config.MaxProbeInterval.Seconds()),
+			"tls_warn_days_min":      config.MinTLSWarnDays,
+			"tls_warn_days_max":      config.MaxTLSWarnDays,
+			"speedtest_interval_min": int(config.MinSpeedtestInterval.Seconds()),
+			"speedtest_interval_max": int(config.MaxSpeedtestInterval.Seconds()),
 		},
 	}
 }
@@ -98,13 +102,14 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		IPCheckIntervalSeconds int            `json:"ip_check_interval_seconds"`
-		TunnelIntervalSeconds  int            `json:"tunnel_interval_seconds"`
-		IPSources              []ipSourceDTO  `json:"ip_sources"`
-		NotifyLanguage         string         `json:"notify_language"`
-		ProbeIntervalSeconds   int            `json:"probe_interval_seconds"` // 0 = unverändert
-		TLSWarnDays            int            `json:"tls_warn_days"`          // 0 = unverändert
-		Limits                 map[string]int `json:"limits"`                 // wird ignoriert (Rückgabe von GET)
+		IPCheckIntervalSeconds   int            `json:"ip_check_interval_seconds"`
+		TunnelIntervalSeconds    int            `json:"tunnel_interval_seconds"`
+		IPSources                []ipSourceDTO  `json:"ip_sources"`
+		NotifyLanguage           string         `json:"notify_language"`
+		ProbeIntervalSeconds     int            `json:"probe_interval_seconds"`     // 0 = unverändert
+		TLSWarnDays              int            `json:"tls_warn_days"`              // 0 = unverändert
+		SpeedtestIntervalSeconds *int           `json:"speedtest_interval_seconds"` // fehlt = unverändert, 0 = aus
+		Limits                   map[string]int `json:"limits"`                     // wird ignoriert (Rückgabe von GET)
 	}
 	if !decodeJSON(w, r, &in) {
 		return
@@ -120,6 +125,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.TLSWarnDays != 0 {
 		next.TLSWarnDays = in.TLSWarnDays
+	}
+	if in.SpeedtestIntervalSeconds != nil {
+		next.SpeedtestInterval = time.Duration(*in.SpeedtestIntervalSeconds) * time.Second
 	}
 	next.IPSources = nil
 	for _, src := range in.IPSources {
@@ -140,7 +148,8 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	s.log.Info("Einstellungen geändert", "ip_check_interval", saved.IPCheckInterval,
 		"tunnel_interval", saved.TunnelInterval, "ip_sources", saved.IPSources,
-		"probe_interval", saved.ProbeInterval, "tls_warn_days", saved.TLSWarnDays)
+		"probe_interval", saved.ProbeInterval, "tls_warn_days", saved.TLSWarnDays,
+		"speedtest_interval", saved.SpeedtestInterval)
 	if s.events != nil {
 		s.events.Publish(events.TopicSettings)
 	}

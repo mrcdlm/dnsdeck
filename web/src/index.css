@@ -25,6 +25,10 @@
   --ring: oklch(0.705 0.015 286.067);
   --success: oklch(0.627 0.17 149.2);
   --warning: oklch(0.705 0.16 70.08);
+  /* Diagramme (validiert: Farbsehschwächen + Kontrast zur Karte) */
+  --chart-download: #2a78d6;
+  --chart-upload: #eb6834;
+  --chart-latency: #4a3aa7;
 }
 
 .dark {
@@ -48,6 +52,9 @@
   --ring: oklch(0.552 0.016 285.938);
   --success: oklch(0.723 0.192 149.58);
   --warning: oklch(0.795 0.162 70.08);
+  --chart-download: #3987e5;
+  --chart-upload: #d95926;
+  --chart-latency: #9085e9;
 }
 
 @theme inline {
@@ -74,6 +81,9 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-success: var(--success);
+  --color-chart-download: var(--chart-download);
+  --color-chart-upload: var(--chart-upload);
+  --color-chart-latency: var(--chart-latency);
   --color-warning: var(--warning);
 }
 

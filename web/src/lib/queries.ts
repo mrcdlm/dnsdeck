@@ -154,6 +154,24 @@ export function useRunProbe() {
   })
 }
 
+export function useSpeedtest(limit = 100) {
+  const poll = usePollInterval()
+  return useQuery({
+    queryKey: [...keys.speedtest, limit],
+    queryFn: () => api.speedtest(limit),
+    // Während einer Messung (~20 s) auch ohne Live-Verbindung zeitnah nachladen.
+    refetchInterval: (q) => (q.state.data?.running ? 3_000 : poll),
+  })
+}
+
+export function useRunSpeedtest() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: api.runSpeedtest,
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.speedtest }),
+  })
+}
+
 const PAGE = 50
 
 /** Verlauf: neueste zuerst, „Mehr laden“ über before_id / before. */
