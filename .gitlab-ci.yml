@@ -2,8 +2,11 @@ build-image:
   stage: build
   image: docker:29.8.2-cli
   script:
+    # Tag v0.4.0 → Image 0.4.0 (wie auf ghcr.io); die Version erscheint in der Oberfläche
+    - IMAGE_TAG="${CI_COMMIT_TAG#v}"
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - docker build --pull --provenance=false --sbom=false -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_TAG" .
-    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_TAG"
+    - docker build --pull --provenance=false --sbom=false --build-arg VERSION="$CI_COMMIT_TAG" -t "$CI_REGISTRY_IMAGE:$IMAGE_TAG" .
+    - docker push "$CI_REGISTRY_IMAGE:$IMAGE_TAG"
   rules:
-    - if: $CI_COMMIT_TAG
+    # nur Versions-Tags wie v0.4.0
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
