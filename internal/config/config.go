@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -33,6 +34,9 @@ type Config struct {
 	ISPLookup bool
 	// DNSBLLists: Sperrlisten für die öffentliche IPv4 (nil = aus).
 	DNSBLLists []dnsbl.List
+	// TrustedProxies: Adressen/Netze von Reverse Proxys, deren Angaben zur
+	// Client-IP (CF-Connecting-IP, X-Forwarded-For) übernommen werden.
+	TrustedProxies []netip.Prefix
 }
 
 // Load liest die Konfiguration über getenv (in Tests austauschbar).
@@ -82,6 +86,9 @@ func Load(getenv func(string) string) (*Config, error) {
 	default:
 		return nil, fmt.Errorf("invalid ISP_LOOKUP: %q (on|off)", v)
 	}
+	if c.TrustedProxies, err = ParseTrustedProxies(getenv("TRUSTED_PROXIES")); err != nil {
+		return nil, err
+	}
 	if c.DNSBLLists, err = dnsbl.ParseLists(getenv("DNSBL_LISTS")); err != nil {
 		return nil, err
 	}
@@ -116,5 +123,28 @@ func (c *Config) LogValue() slog.Value {
 		slog.Bool("dnscheck_authoritative", c.DNSCheckAuthoritative),
 		slog.Bool("isp_lookup", c.ISPLookup),
 		slog.Int("dnsbl_lists", len(c.DNSBLLists)),
+		slog.Int("trusted_proxies", len(c.TrustedProxies)),
 	)
+}
+
+// ParseTrustedProxies liest TRUSTED_PROXIES: kommagetrennte IP-Adressen oder
+// Netze (CIDR), z. B. "172.16.0.0/12,127.0.0.1". Leer = keinem Proxy vertrauen.
+func ParseTrustedProxies(s string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for part := range strings.SplitSeq(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if p, err := netip.ParsePrefix(part); err == nil {
+			out = append(out, p.Masked())
+			continue
+		}
+		a, err := netip.ParseAddr(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid TRUSTED_PROXIES entry %q: expected IP address or CIDR", part)
+		}
+		out = append(out, netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()))
+	}
+	return out, nil
 }

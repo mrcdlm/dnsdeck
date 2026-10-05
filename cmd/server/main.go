@@ -235,6 +235,7 @@ func run() error {
 			Store: st, Tracker: tracker, DDNS: svc, Zones: zones,
 			Tunnels: monitor, Events: broker, Settings: settings,
 			Webhooks: dispatcher, WebhookEnv: os.LookupEnv, Propagation: propagation, Probes: probes, Speedtest: speed,
+			TrustedProxies: cfg.TrustedProxies,
 			Info: api.Info{Version: version, CFTokenSet: cfg.CFAPIToken != "", CFAccountSet: cfg.CFAccountID != "",
 				DataDir: cfg.DataDir, DNSCheck: propagation != nil},
 			Auth: auth, Log: log, Static: web.Dist(),

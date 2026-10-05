@@ -104,3 +104,22 @@ func TestLoadISPLookup(t *testing.T) {
 		t.Error("expected error")
 	}
 }
+
+func TestParseTrustedProxies(t *testing.T) {
+	got, err := ParseTrustedProxies(" 172.16.0.0/12, 127.0.0.1,::1 ,10.1.2.3/8")
+	want := []string{"172.16.0.0/12", "127.0.0.1/32", "::1/128", "10.0.0.0/8"}
+	if err != nil || len(got) != len(want) {
+		t.Fatalf("%v %v", got, err)
+	}
+	for i, p := range got {
+		if p.String() != want[i] {
+			t.Errorf("%d: %s, erwartet %s", i, p, want[i])
+		}
+	}
+	if p, err := ParseTrustedProxies(""); err != nil || p != nil {
+		t.Errorf("leer: %v %v", p, err)
+	}
+	if _, err := ParseTrustedProxies("cloudflared"); err == nil {
+		t.Error("Hostname: Fehler erwartet")
+	}
+}

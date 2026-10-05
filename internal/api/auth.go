@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -158,12 +157,4 @@ func sessionCookieFor(r *http.Request, value string, expires time.Time) *http.Co
 // isHTTPS: direkt per TLS oder hinter einem Proxy (z. B. Cloudflare Tunnel).
 func isHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
-}
-
-func clientKey(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

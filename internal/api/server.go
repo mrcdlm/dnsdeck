@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -61,35 +62,38 @@ type Deps struct {
 	Probes ProbeRunner
 	// Speedtest: Geschwindigkeitsmessung (nil = nicht verfügbar)
 	Speedtest SpeedtestRunner
-	Info      Info
-	Auth      *Auth
-	Log       *slog.Logger
-	Static    fs.FS
+	// TrustedProxies: Proxys, deren Client-IP-Header gelten (leer = keine)
+	TrustedProxies []netip.Prefix
+	Info           Info
+	Auth           *Auth
+	Log            *slog.Logger
+	Static         fs.FS
 }
 
 type Server struct {
-	store       dataStore
-	tracker     ipTracker
-	ddns        ddnsService
-	zones       providers.ZoneLister
-	tunnels     tunnelService
-	events      eventSource
-	settings    settingsService
-	webhooks    webhookTester
-	webhookEnv  notify.Env
-	propagation PropagationChecker
-	probes      ProbeRunner
-	speedtest   SpeedtestRunner
-	info        Info
-	auth        *Auth
-	log         *slog.Logger
-	static      fs.FS
+	store          dataStore
+	tracker        ipTracker
+	ddns           ddnsService
+	zones          providers.ZoneLister
+	tunnels        tunnelService
+	events         eventSource
+	settings       settingsService
+	webhooks       webhookTester
+	webhookEnv     notify.Env
+	propagation    PropagationChecker
+	probes         ProbeRunner
+	speedtest      SpeedtestRunner
+	trustedProxies []netip.Prefix
+	info           Info
+	auth           *Auth
+	log            *slog.Logger
+	static         fs.FS
 }
 
 func NewServer(d Deps) *Server {
 	return &Server{store: d.Store, tracker: d.Tracker, ddns: d.DDNS, zones: d.Zones,
 		tunnels: d.Tunnels, events: d.Events, settings: d.Settings, webhooks: d.Webhooks,
-		webhookEnv: d.WebhookEnv, propagation: d.Propagation, probes: d.Probes, speedtest: d.Speedtest, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
+		webhookEnv: d.WebhookEnv, propagation: d.Propagation, probes: d.Probes, speedtest: d.Speedtest, trustedProxies: d.TrustedProxies, info: d.Info, auth: d.Auth, log: d.Log, static: d.Static}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -169,7 +173,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	client := clientKey(r)
+	client := s.clientIP(r)
 	if !s.auth.beginAttempt(client) {
 		writeMsg(w, r, http.StatusTooManyRequests, i18n.M("auth.too_many_attempts"))
 		return

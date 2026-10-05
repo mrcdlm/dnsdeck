@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `TRUSTED_PROXIES`: behind a reverse proxy or Cloudflare Tunnel, the real client address is
+  taken from `CF-Connecting-IP` / `X-Forwarded-For` – for the login rate limit and logs. Before,
+  failed logins of one client blocked everyone behind the same proxy. The headers are only
+  trusted from the configured proxies.
+
 ### Security
 - Cross-site request forgery: write requests to the API are only accepted from dnsdeck's own
   origin. Before, a page on a sibling subdomain of the same domain could, for example, create a

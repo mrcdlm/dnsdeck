@@ -98,6 +98,7 @@ Intervalle, IP-Quellen und Webhooks werden in der Weboberfläche gepflegt.
 | `DNSCHECK_AUTHORITATIVE` | nein | `off` = autoritative Nameserver der Zone nicht abfragen (Standard `on`) |
 | `ISP_LOOKUP` | nein | `off` = Anbieter der öffentlichen IPs nicht ermitteln (Standard `on`), siehe [Funktionsweise](#funktionsweise) |
 | `DNSBL_LISTS` | nein | Sperrlisten für die öffentliche IPv4, kommagetrennt `[Name=]Zone`; leer = Standardliste, `off` = abgeschaltet, siehe [Funktionsweise](#funktionsweise) |
+| `TRUSTED_PROXIES` | nein | IPs oder Netze (CIDR) deines Reverse Proxys bzw. von `cloudflared`, kommagetrennt, z. B. `172.16.0.0/12`; deren Angaben zur Client-IP gelten, siehe [Sicherheit](#sicherheit) |
 | `LOG_LEVEL` | nein | `debug`, `info`, `warn` oder `error` (Standard `info`) |
 | `PORT`, `DATA_DIR` | nein | Port und Datenbankverzeichnis im Container (Standard `8080`, `/data`) |
 
@@ -275,6 +276,13 @@ Datenverzeichnis sichern.
   geschützt durch Cloudflare Access.
 - Hinter einem Proxy mit TLS wird das Session-Cookie automatisch als `Secure` markiert
   (`X-Forwarded-Proto: https`).
+- Hinter einem Proxy kommen alle Anfragen von dessen Adresse: Fehlversuche eines Clients
+  würden dann alle aussperren, und die Logs zeigen nur den Proxy. Mit `TRUSTED_PROXIES` (IP
+  oder Netz des Proxys, für einen Cloudflare Tunnel in Docker meist `172.16.0.0/12`) nutzt
+  dnsdeck `CF-Connecting-IP` bzw. `X-Forwarded-For`. Von allen anderen Absendern werden diese
+  Header ignoriert – Clients können ihre Adresse also nicht fälschen.
+- Schreibende Anfragen von fremden Seiten werden abgelehnt (CSRF-Schutz), auch von
+  Nachbar-Subdomains.
 - Geheimnisse werden ausschließlich aus Umgebungsvariablen gelesen und nie in Datenbank,
   Logs oder API-Antworten geschrieben.
 
