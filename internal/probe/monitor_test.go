@@ -195,3 +195,39 @@ func TestMonitorPoll(t *testing.T) {
 		t.Fatalf("nach Adressänderung: %+v", g)
 	}
 }
+
+func TestMonitorRecordsHistory(t *testing.T) {
+	ctx := t.Context()
+	st, err := store.Open(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	p, _ := st.CreateProbe(ctx, "https://a.example/", true)
+	fc := &fakeChecker{calls: map[string]int{}, results: map[string]Result{p.URL: up(60)}}
+	m := NewMonitor(st, fc, slog.New(slog.DiscardHandler), nil)
+	clock := t0
+	m.now = func() time.Time { return clock }
+
+	m.Poll(ctx)
+	clock = clock.Add(5 * time.Minute)
+	m.Poll(ctx) // gleicher Status → Abschnitt wird verlängert
+	fc.results[p.URL] = Result{HTTPStatus: 200}
+	st.SetProbeExpectedStatus(ctx, p.ID, "204") // Erwartung geändert → beginnt von vorn
+	clock = clock.Add(5 * time.Minute)
+	m.Poll(ctx)
+
+	segs, err := st.ProbeSegments(ctx, p.ID, t0.Add(-time.Hour))
+	if err != nil || len(segs) != 2 || segs[0].Status != store.ProbeUp || !segs[0].LastSeenAt.Equal(t0.Add(5*time.Minute)) ||
+		segs[1].Status != store.ProbeDown {
+		t.Fatalf("Verlauf: %+v %v", segs, err)
+	}
+
+	// Aufräumen nach 30 Tagen
+	clock = clock.Add(31 * 24 * time.Hour)
+	fc.results[p.URL] = Result{HTTPStatus: 204}
+	m.Poll(ctx)
+	if segs, _ = st.ProbeSegments(ctx, p.ID, t0.Add(-time.Hour)); len(segs) != 1 || segs[0].Status != store.ProbeUp {
+		t.Fatalf("nach Aufräumen: %+v", segs)
+	}
+}

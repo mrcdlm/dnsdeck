@@ -131,3 +131,34 @@ func TestProbeSettings(t *testing.T) {
 		t.Fatalf("unverändert: %+v", s)
 	}
 }
+
+func TestProbeExpectedStatusAndUptime(t *testing.T) {
+	e := newTestEnv(t, nil)
+	c := e.login(t)
+
+	if resp := e.do(t, "POST", "/api/probes", `{"url":"https://a.example","expected_status":"abc"}`, c); resp.StatusCode != 400 {
+		t.Fatalf("ungültig: %d", resp.StatusCode)
+	}
+	resp := e.do(t, "POST", "/api/probes", `{"url":"https://a.example","expected_status":" 2XX "}`, c)
+	v := decode[probeView](t, resp)
+	if resp.StatusCode != 201 || v.ExpectedStatus != "2xx" || v.Status != store.ProbeUp {
+		t.Fatalf("anlegen: %d %+v", resp.StatusCode, v.Probe)
+	}
+
+	// Erwartung passt nicht mehr → sofort neu bewertet, ohne Entprellung
+	v = decode[probeView](t, e.do(t, "PUT", "/api/probes/"+itoa(v.ID), `{"expected_status":"204"}`, c))
+	if v.Status != store.ProbeDown || !strings.Contains(v.Message, "HTTP 200") {
+		t.Fatalf("geändert: %+v", v.Probe)
+	}
+	// Leer = zurück zum Standard
+	v = decode[probeView](t, e.do(t, "PUT", "/api/probes/"+itoa(v.ID), `{"expected_status":""}`, c))
+	if v.ExpectedStatus != "" || v.Status != store.ProbeUp {
+		t.Fatalf("zurückgesetzt: %+v", v.Probe)
+	}
+
+	list := decode[[]probeView](t, e.do(t, "GET", "/api/probes", "", c))
+	day, ok := list[0].Uptime["24h"]
+	if len(list) != 1 || !ok || len(day.Buckets) != 48 || day.Percent == nil || len(list[0].Uptime["7d"].Buckets) != 56 {
+		t.Fatalf("Verlauf: %+v", list[0].Uptime)
+	}
+}

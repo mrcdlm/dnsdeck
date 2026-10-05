@@ -237,11 +237,18 @@ export interface Probe {
   tls_valid?: boolean
   last_checked_at?: string
   last_changed_at?: string
+  /** erwartete Statuscodes, z. B. "200" oder "2xx"; fehlt = jede Antwort unter 500 */
+  expected_status?: string
+  created_at: string
+  /** Uptime-Balken; fehlt, wenn der Verlauf nicht lesbar war */
+  uptime?: Record<'24h' | '7d', Uptime>
 }
 
 export interface ProbeInput {
   url?: string
   enabled?: boolean
+  /** "" = zurück zum Standard */
+  expected_status?: string
 }
 
 export interface Settings {

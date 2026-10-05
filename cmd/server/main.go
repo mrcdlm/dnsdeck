@@ -169,6 +169,7 @@ func run() error {
 	probes := probe.NewMonitor(st, probe.NewChecker(), log, broker)
 	probes.Notifier = dispatcher
 	probes.WarnDays = func() int { return settings.Get().TLSWarnDays }
+	probes.Interval = func() time.Duration { return settings.Get().ProbeInterval }
 
 	// Speedtest gegen das nächstgelegene Cloudflare-Rechenzentrum (per Button
 	// oder nach Zeitplan; Standard: nur manuell).

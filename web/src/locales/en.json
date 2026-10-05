@@ -479,13 +479,14 @@
     "removeTitle": "Remove check?",
     "removeHint": "<url>{{url}}</url> will no longer be checked.",
     "removeRecordHint": "<url>{{url}}</url> will no longer be checked. The record itself is kept.",
-    "howItWorks": "dnsdeck requests each address with GET and does not follow redirects. Any response below 500 counts as reachable – a login page too. Certificates are reported {{days}} days before they expire.",
+    "howItWorks": "dnsdeck requests each address with GET and does not follow redirects. Without an expected status any response below 500 counts as reachable – a login page too; with one, only the given codes do. Certificates are reported {{days}} days before they expire.",
     "hairpin": "Checks run from inside the container. Addresses not routed through Cloudflare are sometimes unreachable from your own network although they work from outside (missing NAT loopback on the router).",
     "col": {
       "url": "Address",
       "status": "Status",
       "response": "Response",
-      "certificate": "Certificate"
+      "certificate": "Certificate",
+      "history": "History {{range}}"
     },
     "status": {
       "pending": "Pending",
@@ -494,6 +495,21 @@
       "tls_error": "Certificate invalid",
       "down": "Unreachable",
       "paused": "Paused"
+    },
+    "expected": "Expected status",
+    "expectedPlaceholder": "Expected status, e.g. 200",
+    "expectedHint": "Optional: e.g. 200, 200,204, 2xx or 200-399. Empty = any response below 500 counts as reachable.",
+    "expectedShort": "expected: {{codes}}",
+    "editTitle": "Edit check",
+    "editHint": "Changes are checked right away.",
+    "editLabel": "Edit {{url}}",
+    "urlFromRecord": "The address follows the record and can be changed there.",
+    "bucket": {
+      "healthy": "reachable",
+      "degraded": "certificate expiring",
+      "down": "failing",
+      "inactive": "paused",
+      "none": "no data"
     }
   },
   "speedtest": {

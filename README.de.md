@@ -177,6 +177,11 @@ sich beliebige `http://`- oder `https://`-Adressen eintragen, auch interne.
 - Standardmäßig alle 5 Minuten (**Einstellungen**) schickt dnsdeck eine `GET`-Anfrage, ohne
   Weiterleitungen zu folgen. Jede Antwort unter 500 gilt als erreichbar – auch eine Weiterleitung
   oder Anmeldeseite.
+- Optional lässt sich je Prüfung ein **erwarteter Status** angeben, z. B. `200`, `200,204`, `2xx`
+  oder `200-399`. Dann gelten nur diese Codes als erreichbar – auch ein erwartetes `503`
+  (Wartungsseite).
+- Jede Prüfung führt einen **Verlauf** (30 Tage), angezeigt als Uptime-Balken für 24 Stunden
+  oder 7 Tage, wie bei den Tunnels.
 - Als nicht erreichbar gilt ein Dienst erst nach **zwei Fehlschlägen in Folge**; kurze Aussetzer
   lösen so keine Benachrichtigung aus.
 - Bei jeder Anfrage wird das TLS-Zertifikat geprüft: Gültigkeit, Hostname, vertrauenswürdiger

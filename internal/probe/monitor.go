@@ -26,7 +26,12 @@ type probeStore interface {
 	ListProbes(ctx context.Context) ([]store.Probe, error)
 	GetProbe(ctx context.Context, id int64) (store.Probe, error)
 	SetProbeResult(ctx context.Context, id int64, url string, r store.ProbeResult) error
+	RecordProbeStatus(ctx context.Context, probeID int64, status string, now time.Time, maxGap time.Duration) error
+	PurgeProbeSegments(ctx context.Context, before time.Time) (int64, error)
 }
+
+// Aufbewahrung des Statusverlaufs (wie bei Tunnels).
+const retention = 30 * 24 * time.Hour
 
 type checker interface {
 	Check(ctx context.Context, rawURL string) Result
@@ -41,18 +46,31 @@ type Monitor struct {
 	pub     events.Publisher
 	// WarnDays: ab wie vielen Tagen Restlaufzeit vor dem Zertifikat gewarnt wird.
 	WarnDays func() int
+	// Interval: Abstand der geplanten Prüfungen (für den Verlauf: so lange
+	// gilt eine Beobachtung, Lücken darüber hinaus bleiben unbekannt).
+	Interval func() time.Duration
 	// Notifier erhält Ereignisse (optional).
 	Notifier notify.Notifier
 	now      func() time.Time
 
-	mu    sync.Mutex
-	locks map[int64]*sync.Mutex // je Prüfung, damit Zeitplan und Button sich nicht überholen
+	mu     sync.Mutex
+	locks  map[int64]*sync.Mutex // je Prüfung, damit Zeitplan und Button sich nicht überholen
+	purged time.Time
 }
 
 func NewMonitor(st probeStore, c checker, log *slog.Logger, pub events.Publisher) *Monitor {
 	return &Monitor{store: st, checker: c, log: log, pub: pub, now: time.Now,
-		WarnDays: func() int { return DefaultWarnDays }, locks: map[int64]*sync.Mutex{}}
+		WarnDays: func() int { return DefaultWarnDays },
+		Interval: func() time.Duration { return DefaultInterval },
+		locks:    map[int64]*sync.Mutex{}}
 }
+
+// DefaultInterval entspricht config.DefaultProbeInterval.
+const DefaultInterval = 5 * time.Minute
+
+// maxGap: so lange darf die letzte Prüfung zurückliegen, ohne dass der Verlauf
+// eine Lücke bekommt (drei verpasste Prüfungen, mindestens 15 Minuten).
+func (m *Monitor) maxGap() time.Duration { return max(3*m.Interval(), 15*time.Minute) }
 
 // Poll prüft alle aktiven Prüfungen (begrenzt parallel).
 func (m *Monitor) Poll(ctx context.Context) error {
@@ -76,6 +94,18 @@ func (m *Monitor) Poll(ctx context.Context) error {
 		})
 	}
 	wg.Wait()
+
+	m.mu.Lock()
+	purge := m.now().Sub(m.purged) > time.Hour
+	if purge {
+		m.purged = m.now()
+	}
+	m.mu.Unlock()
+	if purge {
+		if _, err := m.store.PurgeProbeSegments(ctx, m.now().Add(-retention)); err != nil {
+			m.log.Error("Verlauf der Prüfungen aufräumen fehlgeschlagen", "err", err)
+		}
+	}
 	return nil
 }
 
@@ -111,9 +141,13 @@ func (m *Monitor) run(ctx context.Context, id int64) error {
 	if ctx.Err() != nil {
 		return ctx.Err() // abgebrochen (Shutdown) – kein Ergebnis speichern
 	}
-	r, evs := Evaluate(p, res, m.now(), m.WarnDays())
+	now := m.now()
+	r, evs := Evaluate(p, res, now, m.WarnDays())
 	if err := m.store.SetProbeResult(ctx, p.ID, p.URL, r); err != nil {
 		return err
+	}
+	if err := m.store.RecordProbeStatus(ctx, p.ID, r.Status, now, m.maxGap()); err != nil {
+		m.log.Warn("Verlauf der Prüfung nicht gespeichert", "url", p.URL, "err", err)
 	}
 	if r.Changed {
 		m.log.Info("Erreichbarkeit geändert", "url", p.URL, "from", p.Status, "to", r.Status,
@@ -135,7 +169,17 @@ func Evaluate(p store.Probe, res Result, now time.Time, warnDays int) (store.Pro
 	if res.HTTPStatus > 0 {
 		r.HTTPStatus = &res.HTTPStatus
 	}
-	if ms := int(res.Latency.Milliseconds()); res.Up() {
+	// Mit erwarteten Statuscodes entscheidet allein der Code – auch ein
+	// erwartetes 503 (Wartungsseite) gilt dann als erreichbar.
+	failure := res.Err
+	if exp, spec, err := ParseExpected(p.ExpectedStatus); err == nil && len(exp) > 0 && res.HTTPStatus > 0 {
+		failure = i18n.Msg{}
+		if !exp.Match(res.HTTPStatus) {
+			failure = i18n.M("probe.status_unexpected", "status", strconv.Itoa(res.HTTPStatus), "expected", spec)
+		}
+	}
+	up := failure.IsZero()
+	if ms := int(res.Latency.Milliseconds()); up {
 		r.LatencyMS = &ms
 	}
 	host := hostOf(p.URL)
@@ -145,14 +189,14 @@ func Evaluate(p store.Probe, res Result, now time.Time, warnDays int) (store.Pro
 	case res.TLS != nil:
 		na, valid := res.TLS.NotAfter, res.TLS.Err.IsZero()
 		r.TLSNotAfter, r.TLSIssuer, r.TLSValid = &na, res.TLS.Issuer, &valid
-	case !res.Up():
+	case !up:
 		r.TLSNotAfter, r.TLSIssuer, r.TLSValid = p.TLSNotAfter, p.TLSIssuer, p.TLSValid
 	}
 
 	var days int
 	switch {
-	case !res.Up():
-		r.Status, r.Message = store.ProbeDown, res.Err
+	case !up:
+		r.Status, r.Message = store.ProbeDown, failure
 	case res.TLS != nil && !res.TLS.Err.IsZero():
 		r.Status, r.Message = store.ProbeTLSError, res.TLS.Err
 	case res.TLS != nil && res.TLS.NotAfter.Sub(now) <= time.Duration(warnDays)*24*time.Hour:
@@ -168,7 +212,7 @@ func Evaluate(p store.Probe, res Result, now time.Time, warnDays int) (store.Pro
 		r.FailCount = p.FailCount + 1
 		if r.FailCount < FailThreshold && p.Status != store.ProbePending && p.Status != store.ProbeDown {
 			r.Status = p.Status
-			r.Message = i18n.M("probe.retrying", "detail", i18n.Nest(res.Err))
+			r.Message = i18n.M("probe.retrying", "detail", i18n.Nest(failure))
 		}
 	}
 	r.Changed = r.Status != p.Status

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   taken from `CF-Connecting-IP` / `X-Forwarded-For` – for the login rate limit and logs. Before,
   failed logins of one client blocked everyone behind the same proxy. The headers are only
   trusted from the configured proxies.
+- Reachability checks keep a 30-day history, shown as uptime bars (24 hours / 7 days) on the
+  Reachability page.
+- Expected status per check (e.g. `200`, `2xx`, `200-399`): only these codes count as
+  reachable. Checks can now be edited (address and expected status).
 
 ### Security
 - Cross-site request forgery: write requests to the API are only accepted from dnsdeck's own

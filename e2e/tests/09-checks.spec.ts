@@ -120,3 +120,37 @@ test('Erreichbarkeit: Einstellungen und mobile Ansicht', async ({ page }) => {
   await expect(page.getByText(/30 Tage vor Ablauf gewarnt/)).toBeVisible()
   await expectNoHorizontalOverflow(page)
 })
+
+test('Erreichbarkeit: erwarteter Status, Bearbeiten, Verlauf', async ({ page }) => {
+  const svc = await startService()
+  try {
+    await page.goto('/erreichbarkeit')
+    await page.getByLabel('Adresse').fill(svc.url)
+    await page.getByLabel('Erwarteter Status').fill('204')
+    await page.getByRole('button', { name: 'Prüfung hinzufügen' }).click()
+    const r = row(page, svc.url)
+    // Dienst liefert 200, erwartet ist 204 → sofort gestört
+    await expect(r.getByText('Unerwarteter Status HTTP 200 (erwartet: 204)')).toBeVisible()
+    await expect(r.getByText('erwartet: 204', { exact: true })).toBeVisible()
+    await expect(r.getByRole('img', { name: /Uptime 24 Stunden/ })).toBeVisible()
+
+    // Bearbeiten: Erwartung auf 2xx → wieder erreichbar
+    await r.getByRole('button', { name: `${svc.url} bearbeiten` }).click()
+    const dlg = page.getByRole('dialog')
+    await dlg.getByLabel('Erwarteter Status').fill('2xx')
+    await dlg.getByRole('button', { name: 'Speichern' }).click()
+    await expect(dlg).toBeHidden()
+    await expect(r.getByText('Erreichbar', { exact: true })).toBeVisible()
+    await expect(r.getByText('erwartet: 2xx', { exact: true })).toBeVisible()
+
+    // Zeitraum umschalten
+    await page.getByRole('button', { name: '7 Tage' }).click()
+    await expect(r.getByRole('img', { name: /Uptime 7 Tage/ })).toBeVisible()
+
+    await r.getByRole('button', { name: `${svc.url} entfernen` }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Entfernen' }).click()
+    await expect(r).toHaveCount(0)
+  } finally {
+    svc.close()
+  }
+})

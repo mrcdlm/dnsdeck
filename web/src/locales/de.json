@@ -479,13 +479,14 @@
     "removeTitle": "Prüfung entfernen?",
     "removeHint": "<url>{{url}}</url> wird nicht mehr geprüft.",
     "removeRecordHint": "<url>{{url}}</url> wird nicht mehr geprüft. Der Record selbst bleibt erhalten.",
-    "howItWorks": "dnsdeck ruft jede Adresse per GET auf, ohne Weiterleitungen zu folgen. Jede Antwort unter 500 gilt als erreichbar – auch eine Anmeldeseite. Vor Zertifikaten wird {{days}} Tage vor Ablauf gewarnt.",
+    "howItWorks": "dnsdeck ruft jede Adresse per GET auf, ohne Weiterleitungen zu folgen. Ohne erwarteten Status gilt jede Antwort unter 500 als erreichbar – auch eine Anmeldeseite; mit erwartetem Status nur die angegebenen Codes. Vor Zertifikaten wird {{days}} Tage vor Ablauf gewarnt.",
     "hairpin": "Geprüft wird aus dem Container heraus. Nicht über Cloudflare geleitete Adressen sind aus dem eigenen Netz manchmal nicht erreichbar, obwohl sie es von außen sind (fehlendes NAT-Loopback am Router).",
     "col": {
       "url": "Adresse",
       "status": "Status",
       "response": "Antwort",
-      "certificate": "Zertifikat"
+      "certificate": "Zertifikat",
+      "history": "Verlauf {{range}}"
     },
     "status": {
       "pending": "Ausstehend",
@@ -494,6 +495,21 @@
       "tls_error": "Zertifikat ungültig",
       "down": "Nicht erreichbar",
       "paused": "Pausiert"
+    },
+    "expected": "Erwarteter Status",
+    "expectedPlaceholder": "Erwarteter Status, z. B. 200",
+    "expectedHint": "Optional: z. B. 200, 200,204, 2xx oder 200-399. Leer = jede Antwort unter 500 gilt als erreichbar.",
+    "expectedShort": "erwartet: {{codes}}",
+    "editTitle": "Prüfung bearbeiten",
+    "editHint": "Änderungen werden sofort geprüft.",
+    "editLabel": "{{url}} bearbeiten",
+    "urlFromRecord": "Die Adresse folgt dem Record und lässt sich dort ändern.",
+    "bucket": {
+      "healthy": "erreichbar",
+      "degraded": "Zertifikat läuft ab",
+      "down": "gestört",
+      "inactive": "pausiert",
+      "none": "keine Daten"
     }
   },
   "speedtest": {

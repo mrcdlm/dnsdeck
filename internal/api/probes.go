@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/events"
 	"github.com/mrcdlm/dnsdeck/internal/i18n"
 	"github.com/mrcdlm/dnsdeck/internal/probe"
 	"github.com/mrcdlm/dnsdeck/internal/store"
+	"github.com/mrcdlm/dnsdeck/internal/tunnels"
 )
 
 type probeStore interface {
@@ -16,9 +18,11 @@ type probeStore interface {
 	GetProbe(ctx context.Context, id int64) (store.Probe, error)
 	CreateProbe(ctx context.Context, url string, enabled bool) (store.Probe, error)
 	UpdateProbe(ctx context.Context, id int64, url string, enabled bool) (store.Probe, error)
+	SetProbeExpectedStatus(ctx context.Context, id int64, spec string) error
 	DeleteProbe(ctx context.Context, id int64) error
 	SetRecordProbe(ctx context.Context, recordID int64, url string) error
 	RecordProbe(ctx context.Context, recordID int64) (store.Probe, error)
+	ProbeSegments(ctx context.Context, probeID int64, since time.Time) ([]store.Segment, error)
 }
 
 // ProbeRunner führt eine Erreichbarkeitsprüfung sofort aus.
@@ -26,9 +30,29 @@ type ProbeRunner interface {
 	Run(ctx context.Context, id int64) (store.Probe, error)
 }
 
-func localizeProbe(p store.Probe, lang i18n.Lang) store.Probe {
+// probeView ist eine Prüfung mit Uptime-Balken (24 h / 7 Tage).
+type probeView struct {
+	store.Probe
+	Uptime map[string]tunnels.Uptime `json:"uptime"`
+}
+
+// probeView übersetzt die Meldung und ergänzt den Verlauf. Fehlt er (DB-Fehler),
+// bleibt die Prüfung trotzdem sichtbar.
+func (s *Server) probeView(ctx context.Context, p store.Probe, lang i18n.Lang) probeView {
 	p.Message = i18n.T(lang, p.MessageMsg)
-	return p
+	v := probeView{Probe: p}
+	interval := probe.DefaultInterval
+	if s.settings != nil {
+		interval = s.settings.Get().ProbeInterval
+	}
+	now := time.Now()
+	segs, err := s.store.ProbeSegments(ctx, p.ID, now.Add(-probe.LongestRange))
+	if err != nil {
+		s.log.Warn("Verlauf der Prüfung nicht lesbar", "url", p.URL, "err", err)
+		return v
+	}
+	v.Uptime = probe.Uptimes(segs, now, interval)
+	return v
 }
 
 func (s *Server) handleListProbes(w http.ResponseWriter, r *http.Request) {
@@ -38,15 +62,31 @@ func (s *Server) handleListProbes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lang := i18n.FromRequest(r)
-	for i := range list {
-		list[i] = localizeProbe(list[i], lang)
+	out := make([]probeView, len(list))
+	for i, p := range list {
+		out[i] = s.probeView(r.Context(), p, lang)
 	}
-	writeJSON(w, http.StatusOK, list)
+	writeJSON(w, http.StatusOK, out)
 }
 
 type probeInput struct {
 	URL     *string `json:"url"`
 	Enabled *bool   `json:"enabled"`
+	// ExpectedStatus: z. B. "200" oder "2xx"; "" = Standard (< 500), fehlt = unverändert
+	ExpectedStatus *string `json:"expected_status"`
+}
+
+// expectedSpec prüft expected_status und liefert die normalisierte Angabe.
+func expectedSpec(w http.ResponseWriter, r *http.Request, in probeInput) (string, bool) {
+	if in.ExpectedStatus == nil {
+		return "", true
+	}
+	_, spec, err := probe.ParseExpected(*in.ExpectedStatus)
+	if err != nil {
+		writeMsg(w, r, http.StatusBadRequest, i18n.FromError(err))
+		return "", false
+	}
+	return spec, true
 }
 
 func (s *Server) handleCreateProbe(w http.ResponseWriter, r *http.Request) {
@@ -63,17 +103,26 @@ func (s *Server) handleCreateProbe(w http.ResponseWriter, r *http.Request) {
 		writeMsg(w, r, http.StatusBadRequest, i18n.FromError(err))
 		return
 	}
+	spec, ok := expectedSpec(w, r, in)
+	if !ok {
+		return
+	}
 	p, err := s.store.CreateProbe(r.Context(), u, in.Enabled == nil || *in.Enabled)
 	if errors.Is(err, store.ErrConflict) {
 		writeMsg(w, r, http.StatusConflict, i18n.M("probe.conflict", "url", u))
 		return
+	}
+	if err == nil && spec != "" {
+		if err = s.store.SetProbeExpectedStatus(r.Context(), p.ID, spec); err == nil {
+			p, err = s.store.GetProbe(r.Context(), p.ID)
+		}
 	}
 	if err != nil {
 		s.internalError(w, r, "Prüfung anlegen", err)
 		return
 	}
 	s.log.Info("Erreichbarkeitsprüfung angelegt", "url", p.URL)
-	writeJSON(w, http.StatusCreated, localizeProbe(s.runProbe(r, p), i18n.FromRequest(r)))
+	writeJSON(w, http.StatusCreated, s.probeView(r.Context(), s.runProbe(r, p), i18n.FromRequest(r)))
 }
 
 func (s *Server) handleUpdateProbe(w http.ResponseWriter, r *http.Request) {
@@ -108,7 +157,16 @@ func (s *Server) handleUpdateProbe(w http.ResponseWriter, r *http.Request) {
 	if in.Enabled != nil {
 		enabled = *in.Enabled
 	}
+	spec, ok := expectedSpec(w, r, in)
+	if !ok {
+		return
+	}
 	p, err := s.store.UpdateProbe(r.Context(), id, u, enabled)
+	if err == nil && in.ExpectedStatus != nil && spec != old.ExpectedStatus {
+		if err = s.store.SetProbeExpectedStatus(r.Context(), id, spec); err == nil {
+			p, err = s.store.GetProbe(r.Context(), id)
+		}
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		writeMsg(w, r, http.StatusNotFound, i18n.M("probe.not_found"))
@@ -120,12 +178,12 @@ func (s *Server) handleUpdateProbe(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "Prüfung ändern", err)
 		return
 	}
-	if p.Status == store.ProbePending { // neu begonnen (Adresse geändert oder wieder aktiviert)
+	if p.Status == store.ProbePending { // neu begonnen (Adresse/Erwartung geändert oder wieder aktiviert)
 		p = s.runProbe(r, p)
 	} else {
 		events.Publish(s.events, events.TopicProbes)
 	}
-	writeJSON(w, http.StatusOK, localizeProbe(p, i18n.FromRequest(r)))
+	writeJSON(w, http.StatusOK, s.probeView(r.Context(), p, i18n.FromRequest(r)))
 }
 
 func (s *Server) handleDeleteProbe(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +218,7 @@ func (s *Server) handleRunProbe(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, r, "Prüfung lesen", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, localizeProbe(s.runProbe(r, p), i18n.FromRequest(r)))
+	writeJSON(w, http.StatusOK, s.probeView(r.Context(), s.runProbe(r, p), i18n.FromRequest(r)))
 }
 
 // runProbe prüft sofort, damit der Benutzer das Ergebnis direkt sieht.

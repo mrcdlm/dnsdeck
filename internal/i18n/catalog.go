@@ -129,6 +129,8 @@ var catalog = map[string]entry{
 	"probe.cert_untrusted":              {"Zertifikat von unbekannter Stelle (selbst signiert?)", "Certificate from an unknown authority (self-signed?)"},
 	"probe.cert_invalid":                {"Zertifikat ungültig: {detail}", "Invalid certificate: {detail}"},
 	"probe.cert_expires":                {"Zertifikat läuft am {date} ab (noch {days} Tage)", "Certificate expires on {date} ({days} days left)"},
+	"probe.status_unexpected":           {"Unerwarteter Status HTTP {status} (erwartet: {expected})", "Unexpected status HTTP {status} (expected: {expected})"},
+	"probe.expected_invalid":            {"Ungültiger erwarteter Status „{value}“ – z. B. 200, 200,204, 2xx oder 200-399", "Invalid expected status \"{value}\" – e.g. 200, 200,204, 2xx or 200-399"},
 	"settings.probe_interval_range":     {"Prüfintervall der Erreichbarkeit muss zwischen {min} und {max} liegen", "The reachability check interval must be between {min} and {max}"},
 	"settings.tls_warn_days_range":      {"Zertifikatswarnung muss zwischen {min} und {max} Tagen liegen", "The certificate warning must be between {min} and {max} days"},
 	"settings.speedtest_interval_range": {"Speedtest-Intervall muss aus sein oder zwischen {min} und {max} liegen", "The speed test interval must be off or between {min} and {max}"},

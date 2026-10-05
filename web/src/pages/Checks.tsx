@@ -1,7 +1,9 @@
-import { Info, Link2, Loader2, Lock, LockOpen, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react'
+import { Info, Link2, Loader2, Lock, LockOpen, Pencil, Plus, RefreshCw, ShieldAlert, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 
+import { ProbeDialog } from '@/components/ProbeDialog'
+import { UptimeBar } from '@/components/UptimeBar'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,11 +27,31 @@ import { certDaysLeft, probeStatusVariant } from '@/lib/probes'
 import { useDeleteProbe, useProbes, useRunProbe, useSaveProbe, useSettings } from '@/lib/queries'
 import { cn } from '@/lib/utils'
 
+type Range = '24h' | '7d'
+const ranges: Range[] = ['24h', '7d']
+
 interface RowProps {
   probe: Probe
   now: number
   warnDays: number
+  range: Range
+  onEdit: () => void
   onDelete: () => void
+}
+
+function History({ probe, range }: { probe: Probe; range: Range }) {
+  const { t } = useTranslation()
+  const uptime = probe.uptime?.[range]
+  if (!uptime) return <span className="text-muted-foreground text-xs">—</span>
+  return (
+    <UptimeBar
+      uptime={uptime}
+      label={t(`tunnels.range.${range}`)}
+      observedSince={probe.created_at}
+      bucketTexts="checks.bucket"
+      compact
+    />
+  )
 }
 
 function Address({ probe }: { probe: Probe }) {
@@ -48,6 +70,11 @@ function Address({ probe }: { probe: Probe }) {
         <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
           <Link2 className="size-3" aria-hidden />
           {t('checks.fromRecord')}
+        </div>
+      )}
+      {probe.expected_status && (
+        <div className="text-muted-foreground mt-0.5 text-xs">
+          {t('checks.expectedShort', { codes: probe.expected_status })}
         </div>
       )}
     </div>
@@ -84,7 +111,7 @@ function Response({ probe }: { probe: Probe }) {
   )
 }
 
-function Certificate({ probe, now, warnDays }: Omit<RowProps, 'onDelete'>) {
+function Certificate({ probe, now, warnDays }: Pick<RowProps, 'probe' | 'now' | 'warnDays'>) {
   const { t } = useTranslation()
   const days = certDaysLeft(probe, now)
   if (days === undefined || !probe.tls_not_after) {
@@ -106,7 +133,7 @@ function Certificate({ probe, now, warnDays }: Omit<RowProps, 'onDelete'>) {
   )
 }
 
-function Actions({ probe, onDelete }: { probe: Probe; onDelete: () => void }) {
+function Actions({ probe, onEdit, onDelete }: { probe: Probe; onEdit: () => void; onDelete: () => void }) {
   const { t } = useTranslation()
   const run = useRunProbe()
   const save = useSaveProbe()
@@ -132,6 +159,15 @@ function Actions({ probe, onDelete }: { probe: Probe; onDelete: () => void }) {
       <Button
         variant="ghost"
         size="icon"
+        aria-label={t('checks.editLabel', { url: probe.url })}
+        title={t('common.edit')}
+        onClick={onEdit}
+      >
+        <Pencil />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         aria-label={t('checks.removeLabel', { url: probe.url })}
         title={t('common.remove')}
         onClick={onDelete}
@@ -150,13 +186,13 @@ function Checked({ probe, now }: { probe: Probe; now: number }) {
   )
 }
 
-function ProbeRow({ probe, now, warnDays, onDelete }: RowProps) {
+function ProbeRow({ probe, now, warnDays, range, onEdit, onDelete }: RowProps) {
   return (
     <TableRow className={cn(!probe.enabled && 'opacity-60')}>
-      <TableCell className="max-w-[18rem]">
+      <TableCell className="max-w-[18rem] min-w-44">
         <Address probe={probe} />
       </TableCell>
-      <TableCell className="max-w-[18rem]">
+      <TableCell className="max-w-[14rem]">
         <Status probe={probe} />
       </TableCell>
       <TableCell>
@@ -165,24 +201,27 @@ function ProbeRow({ probe, now, warnDays, onDelete }: RowProps) {
       <TableCell className="max-w-[12rem]">
         <Certificate probe={probe} now={now} warnDays={warnDays} />
       </TableCell>
-      <TableCell className="text-muted-foreground hidden text-xs whitespace-nowrap lg:table-cell">
+      <TableCell className="w-40 min-w-36">
+        <History probe={probe} range={range} />
+      </TableCell>
+      <TableCell className="text-muted-foreground hidden text-xs whitespace-nowrap xl:table-cell">
         <Checked probe={probe} now={now} />
       </TableCell>
       <TableCell>
-        <Actions probe={probe} onDelete={onDelete} />
+        <Actions probe={probe} onEdit={onEdit} onDelete={onDelete} />
       </TableCell>
     </TableRow>
   )
 }
 
 /** Mobile Darstellung: eine Karte je Prüfung. */
-function ProbeCard({ probe, now, warnDays, onDelete }: RowProps) {
+function ProbeCard({ probe, now, warnDays, range, onEdit, onDelete }: RowProps) {
   const { t } = useTranslation()
   return (
     <li className={cn('flex flex-col gap-2 p-4', !probe.enabled && 'opacity-60')} data-probe={probe.url}>
       <div className="flex items-start justify-between gap-2">
         <Address probe={probe} />
-        <Actions probe={probe} onDelete={onDelete} />
+        <Actions probe={probe} onEdit={onEdit} onDelete={onDelete} />
       </div>
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
         <div>
@@ -191,6 +230,7 @@ function ProbeCard({ probe, now, warnDays, onDelete }: RowProps) {
         <Response probe={probe} />
         <Certificate probe={probe} now={now} warnDays={warnDays} />
       </div>
+      <History probe={probe} range={range} />
       {probe.last_checked_at && (
         <span className="text-muted-foreground text-xs">
           {t('records.checkedAgo', { time: relativeTime(probe.last_checked_at, now) })}
@@ -204,10 +244,14 @@ function AddForm() {
   const { t } = useTranslation()
   const save = useSaveProbe()
   const [url, setURL] = useState('')
+  const [expected, setExpected] = useState('')
 
   function submit(e: FormEvent) {
     e.preventDefault()
-    save.mutate({ input: { url } }, { onSuccess: () => setURL('') })
+    save.mutate(
+      { input: { url, ...(expected.trim() ? { expected_status: expected.trim() } : {}) } },
+      { onSuccess: () => (setURL(''), setExpected('')) },
+    )
   }
 
   return (
@@ -224,6 +268,19 @@ function AddForm() {
           autoComplete="off"
           spellCheck={false}
           inputMode="url"
+        />
+        <Input
+          aria-label={t('checks.expected')}
+          title={t('checks.expectedHint')}
+          placeholder={t('checks.expectedPlaceholder')}
+          value={expected}
+          onChange={(e) => {
+            setExpected(e.target.value)
+            save.reset()
+          }}
+          autoComplete="off"
+          spellCheck={false}
+          className="sm:w-56 sm:shrink-0"
         />
         <Button type="submit" disabled={!url.trim() || save.isPending} className="shrink-0">
           {save.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
@@ -246,13 +303,41 @@ export function Checks() {
   const del = useDeleteProbe()
   const now = useNow()
   const [toDelete, setToDelete] = useState<Probe>()
+  const [editing, setEditing] = useState<Probe>()
+  const [range, setRange] = useState<Range>('24h')
   const warnDays = settings.data?.tls_warn_days ?? 14
+  const rowProps = (p: Probe) => ({
+    probe: p,
+    now,
+    warnDays,
+    range,
+    onEdit: () => setEditing(p),
+    onDelete: () => setToDelete(p),
+  })
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t('nav.checks')}</h1>
-        <p className="text-muted-foreground text-sm">{t('checks.subtitle')}</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{t('nav.checks')}</h1>
+          <p className="text-muted-foreground text-sm">{t('checks.subtitle')}</p>
+        </div>
+        <div className="bg-muted flex rounded-md p-0.5" role="group" aria-label={t('tunnels.period')}>
+          {ranges.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setRange(r)}
+              aria-pressed={range === r}
+              className={cn(
+                'rounded px-3 py-1 text-sm font-medium transition-colors',
+                range === r ? 'bg-background shadow-xs' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t(`tunnels.range.${r}`)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <AddForm />
@@ -277,7 +362,8 @@ export function Checks() {
                     <TableHead>{t('checks.col.status')}</TableHead>
                     <TableHead>{t('checks.col.response')}</TableHead>
                     <TableHead>{t('checks.col.certificate')}</TableHead>
-                    <TableHead className="hidden lg:table-cell">{t('records.col.checked')}</TableHead>
+                    <TableHead>{t('checks.col.history', { range: t(`tunnels.range.${range}`) })}</TableHead>
+                    <TableHead className="hidden xl:table-cell">{t('records.col.checked')}</TableHead>
                     <TableHead className="text-right">
                       <span className="sr-only">{t('records.col.actions')}</span>
                     </TableHead>
@@ -285,14 +371,14 @@ export function Checks() {
                 </TableHeader>
                 <TableBody>
                   {probes.data.map((p) => (
-                    <ProbeRow key={p.id} probe={p} now={now} warnDays={warnDays} onDelete={() => setToDelete(p)} />
+                    <ProbeRow key={p.id} {...rowProps(p)} />
                   ))}
                 </TableBody>
               </Table>
             </div>
             <ul className="divide-y md:hidden">
               {probes.data.map((p) => (
-                <ProbeCard key={p.id} probe={p} now={now} warnDays={warnDays} onDelete={() => setToDelete(p)} />
+                <ProbeCard key={p.id} {...rowProps(p)} />
               ))}
             </ul>
           </>
@@ -334,6 +420,8 @@ export function Checks() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ProbeDialog probe={editing} onClose={() => setEditing(undefined)} />
     </div>
   )
 }

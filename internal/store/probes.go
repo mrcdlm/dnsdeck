@@ -26,11 +26,14 @@ type Probe struct {
 	// RecordName: Name des zugehörigen Records (nur zur Anzeige).
 	RecordName string `json:"record_name,omitempty"`
 	URL        string `json:"url"`
-	Enabled    bool   `json:"enabled"`
-	Status     string `json:"status"`
-	HTTPStatus *int   `json:"http_status,omitempty"`
-	LatencyMS  *int   `json:"latency_ms,omitempty"`
-	FailCount  int    `json:"fail_count"`
+	// ExpectedStatus: erwartete HTTP-Statuscodes, z. B. "200" oder "2xx"
+	// (leer = jede Antwort unter 500 gilt als erreichbar).
+	ExpectedStatus string `json:"expected_status,omitempty"`
+	Enabled        bool   `json:"enabled"`
+	Status         string `json:"status"`
+	HTTPStatus     *int   `json:"http_status,omitempty"`
+	LatencyMS      *int   `json:"latency_ms,omitempty"`
+	FailCount      int    `json:"fail_count"`
 	// Message: von der API gerenderter Text; MessageMsg: übersetzbare Meldung.
 	Message       string     `json:"message,omitempty"`
 	MessageMsg    i18n.Msg   `json:"-"`
@@ -61,7 +64,7 @@ type ProbeResult struct {
 
 const probeCols = `p.id, p.record_id, r.name, p.url, p.enabled, p.status, p.http_status, p.latency_ms,
 	p.fail_count, p.message_i18n, p.tls_not_after, p.tls_issuer, p.tls_valid, p.cert_warned_for,
-	p.last_checked_at, p.last_changed_at, p.created_at, p.updated_at`
+	p.last_checked_at, p.last_changed_at, p.created_at, p.updated_at, p.expected_status`
 
 const probeFrom = ` FROM probes p LEFT JOIN records r ON r.id = p.record_id`
 
@@ -104,6 +107,26 @@ func (s *Store) UpdateProbe(ctx context.Context, id int64, url string, enabled b
 		return Probe{}, ErrNotFound
 	}
 	return s.GetProbe(ctx, id)
+}
+
+// SetProbeExpectedStatus legt die erwarteten Statuscodes fest ("" = Standard).
+// Die Angabe muss vorher geprüft sein (probe.ParseExpected). Ändert sie sich,
+// beginnt eine aktive Prüfung von vorn, damit das nächste Ergebnis sofort gilt.
+func (s *Store) SetProbeExpectedStatus(ctx context.Context, id int64, spec string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE probes SET
+			status = CASE WHEN COALESCE(expected_status, '') <> ?1 AND enabled = 1 THEN ?2 ELSE status END,
+			fail_count = CASE WHEN COALESCE(expected_status, '') <> ?1 THEN 0 ELSE fail_count END,
+			expected_status = NULLIF(?1, ''), updated_at = ?3
+		 WHERE id = ?4`,
+		spec, ProbePending, formatTime(time.Now()), id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func initialProbeStatus(enabled bool) string {
@@ -199,17 +222,18 @@ func scanProbe(sc scanner) (Probe, error) {
 	var (
 		p                                  Probe
 		recordID                           sql.NullInt64
-		recordName, msg, issuer            sql.NullString
+		recordName, msg, issuer, expected  sql.NullString
 		httpStatus, latency                sql.NullInt64
 		tlsValid                           sql.NullBool
 		notAfter, warned, checked, changed sql.NullString
 		created, updated                   string
 	)
 	err := sc.Scan(&p.ID, &recordID, &recordName, &p.URL, &p.Enabled, &p.Status, &httpStatus, &latency,
-		&p.FailCount, &msg, &notAfter, &issuer, &tlsValid, &warned, &checked, &changed, &created, &updated)
+		&p.FailCount, &msg, &notAfter, &issuer, &tlsValid, &warned, &checked, &changed, &created, &updated, &expected)
 	if err != nil {
 		return Probe{}, err
 	}
+	p.ExpectedStatus = expected.String
 	if recordID.Valid {
 		p.RecordID = &recordID.Int64
 	}

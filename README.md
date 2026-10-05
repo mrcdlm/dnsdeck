@@ -170,8 +170,12 @@ on **Check reachability** in its dialog (checks `https://<name>/`), or add any `
 
 - Every 5 minutes by default (**Settings**), dnsdeck sends a `GET` request without following
   redirects. Any response below 500 counts as reachable – a redirect or login page too.
+- Optionally set an **expected status** per check, e.g. `200`, `200,204`, `2xx` or `200-399`.
+  Then only these codes count as reachable – an expected `503` (maintenance page) too.
 - A service only counts as unreachable after **two failures in a row**, so short hiccups do not
   trigger notifications.
+- Every check keeps a **history** (30 days) shown as uptime bars for 24 hours or 7 days, like
+  the tunnels.
 - The TLS certificate is checked on every request: validity, host name, trusted issuer and
   remaining lifetime. dnsdeck warns once per certificate when it expires within 14 days
   (configurable); an invalid certificate counts as an outage.
