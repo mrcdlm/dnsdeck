@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Cross-site request forgery: write requests to the API are only accepted from dnsdeck's own
+  origin. Before, a page on a sibling subdomain of the same domain could, for example, create a
+  webhook and thereby read webhook secrets, despite the `SameSite=Strict` cookie.
+- Login rate limit: attempts are counted before the password check, so parallel requests can
+  no longer exceed the limit of 10 attempts per minute.
+- Changing `APP_PASSWORD` now signs out all existing sessions. After updating, everyone has to
+  sign in once again.
+
 ## [0.4.0] – 2026-10-05
 
 ### Added

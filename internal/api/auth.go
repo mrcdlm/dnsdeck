@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -34,13 +35,17 @@ type sessionStore interface {
 
 // Auth prüft das Passwort und verwaltet Sessions.
 type Auth struct {
-	hash  []byte
-	store sessionStore
-	now   func() time.Time
-	delay time.Duration
+	hash []byte
+	// sessionKey bindet Sessions an APP_PASSWORD: gespeichert wird nur
+	// HMAC(sessionKey, Token). Ändert sich das Passwort, passt kein
+	// gespeicherter Wert mehr – alle Sessions sind sofort ungültig.
+	sessionKey []byte
+	store      sessionStore
+	now        func() time.Time
+	delay      time.Duration
 
 	mu       sync.Mutex
-	failures map[string][]time.Time
+	attempts map[string][]time.Time // Anmeldeversuche je Client im Zeitfenster
 }
 
 // NewAuth erwartet APP_PASSWORD. Ist der Wert bereits ein bcrypt-Hash, wird
@@ -48,7 +53,9 @@ type Auth struct {
 // immer über bcrypt läuft und das Klartext-Passwort nicht im Speicher der
 // Auth-Komponente verbleibt.
 func NewAuth(password string, st sessionStore) (*Auth, error) {
-	a := &Auth{store: st, now: time.Now, delay: failureDelay, failures: map[string][]time.Time{}}
+	key := sha256.Sum256([]byte("dnsdeck session key\x00" + password))
+	a := &Auth{store: st, now: time.Now, delay: failureDelay, attempts: map[string][]time.Time{},
+		sessionKey: key[:]}
 	if strings.HasPrefix(password, "$2") {
 		if _, err := bcrypt.Cost([]byte(password)); err == nil {
 			a.hash = []byte(password)
@@ -70,12 +77,14 @@ func (a *Auth) checkPassword(pw string) bool {
 	return bcrypt.CompareHashAndPassword(a.hash, []byte(pw)) == nil
 }
 
-// tooManyFailures meldet, ob der Client gesperrt ist, und räumt alte Einträge auf.
-func (a *Auth) tooManyFailures(client string) bool {
+// beginAttempt zählt einen Anmeldeversuch, bevor das Passwort geprüft wird,
+// und meldet false, wenn der Client sein Kontingent ausgeschöpft hat. Weil
+// schon der Versuch zählt, hebeln parallele Anfragen die Grenze nicht aus.
+func (a *Auth) beginAttempt(client string) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	cutoff := a.now().Add(-failureWindow)
-	for k, ts := range a.failures {
+	for k, ts := range a.attempts {
 		kept := ts[:0]
 		for _, t := range ts {
 			if t.After(cutoff) {
@@ -83,18 +92,23 @@ func (a *Auth) tooManyFailures(client string) bool {
 			}
 		}
 		if len(kept) == 0 {
-			delete(a.failures, k)
+			delete(a.attempts, k)
 		} else {
-			a.failures[k] = kept
+			a.attempts[k] = kept
 		}
 	}
-	return len(a.failures[client]) >= maxFailures
+	if len(a.attempts[client]) >= maxFailures {
+		return false
+	}
+	a.attempts[client] = append(a.attempts[client], a.now())
+	return true
 }
 
-func (a *Auth) recordFailure(client string) {
+// loginSucceeded vergisst die Versuche des Clients.
+func (a *Auth) loginSucceeded(client string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.failures[client] = append(a.failures[client], a.now())
+	delete(a.attempts, client)
 }
 
 func (a *Auth) newSession(ctx context.Context) (token string, expires time.Time, err error) {
@@ -104,7 +118,7 @@ func (a *Auth) newSession(ctx context.Context) (token string, expires time.Time,
 	}
 	token = base64.RawURLEncoding.EncodeToString(b)
 	expires = a.now().Add(sessionTTL)
-	return token, expires, a.store.CreateSession(ctx, hashToken(token), expires)
+	return token, expires, a.store.CreateSession(ctx, a.hashToken(token), expires)
 }
 
 func (a *Auth) valid(r *http.Request) (bool, error) {
@@ -112,12 +126,16 @@ func (a *Auth) valid(r *http.Request) (bool, error) {
 	if err != nil || c.Value == "" {
 		return false, nil
 	}
-	return a.store.SessionValid(r.Context(), hashToken(c.Value), a.now())
+	return a.store.SessionValid(r.Context(), a.hashToken(c.Value), a.now())
 }
 
-func hashToken(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
+// hashToken liefert den gespeicherten Wert eines Tokens. Das Token selbst steht
+// nie in der DB; ohne Token lässt sich aus dem HMAC nichts über das Passwort
+// ableiten.
+func (a *Auth) hashToken(token string) string {
+	m := hmac.New(sha256.New, a.sessionKey)
+	m.Write([]byte(token))
+	return hex.EncodeToString(m.Sum(nil))
 }
 
 func sessionCookieFor(r *http.Request, value string, expires time.Time) *http.Cookie {

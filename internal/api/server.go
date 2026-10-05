@@ -101,6 +101,9 @@ func (s *Server) Routes() http.Handler {
 
 	r.Route("/api", func(r chi.Router) {
 		r.Use(noStore)
+		// CSRF: schreibende Anfragen nur von derselben Origin. SameSite=Strict
+		// allein schützt nicht vor Seiten auf Nachbar-Subdomains (gleiche Site).
+		r.Use(http.NewCrossOriginProtection().Handler)
 		r.Post("/login", s.handleLogin)
 		r.Post("/logout", s.handleLogout)
 		r.Get("/session", s.handleSession)
@@ -167,7 +170,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	client := clientKey(r)
-	if s.auth.tooManyFailures(client) {
+	if !s.auth.beginAttempt(client) {
 		writeMsg(w, r, http.StatusTooManyRequests, i18n.M("auth.too_many_attempts"))
 		return
 	}
@@ -182,7 +185,6 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !s.auth.checkPassword(body.Password) {
-		s.auth.recordFailure(client)
 		s.log.Warn("Login fehlgeschlagen", "client", client)
 		select {
 		case <-time.After(s.auth.delay):
@@ -192,6 +194,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.auth.loginSucceeded(client)
 	token, exp, err := s.auth.newSession(r.Context())
 	if err != nil {
 		s.log.Error("Session anlegen fehlgeschlagen", "err", err)
@@ -204,7 +207,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil && c.Value != "" {
-		if err := s.store.DeleteSession(r.Context(), hashToken(c.Value)); err != nil {
+		if err := s.store.DeleteSession(r.Context(), s.auth.hashToken(c.Value)); err != nil {
 			s.log.Error("Session löschen fehlgeschlagen", "err", err)
 		}
 	}
