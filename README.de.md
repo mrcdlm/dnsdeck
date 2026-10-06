@@ -90,7 +90,7 @@ Intervalle, IP-Quellen und Webhooks werden in der Weboberfläche gepflegt.
 | `APP_PASSWORD` | ja | Passwort für die Weboberfläche (Klartext oder bcrypt-Hash, max. 72 Bytes) |
 | `CF_API_TOKEN` | für DNS/Tunnels | Cloudflare-API-Token, siehe unten |
 | `CF_ACCOUNT_ID` | für Tunnels | Cloudflare-Account-ID |
-| `DNSDECK_VERSION` | ja (Compose) | Zu startende Image-Version, z. B. `0.4.0` – bewusst fest, kein `latest` |
+| `DNSDECK_VERSION` | ja (Compose) | Zu startende Image-Version, z. B. `0.5.0` – bewusst fest, kein `latest` |
 | `DNSDECK_PORT` | nein | Port auf dem Host für die Weboberfläche (Standard `8080`) |
 | `TZ` | nein | Zeitzone für Log-Zeitstempel (Standard `UTC`) |
 | `WEBHOOK_*` | nein | Geheimnisse für Webhooks, siehe [Benachrichtigungen](#benachrichtigungen) |

@@ -10,7 +10,7 @@ name: dnsdeck
 services:
   dnsdeck:
     # Pinned version from .env – intentionally no "latest"
-    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?Set DNSDECK_VERSION in .env, e.g. 0.4.0}
+    image: ghcr.io/mrcdlm/dnsdeck:${DNSDECK_VERSION:?Set DNSDECK_VERSION in .env, e.g. 0.5.0}
     container_name: dnsdeck
     restart: unless-stopped
     # Runs as non-root and needs no Linux capabilities.
