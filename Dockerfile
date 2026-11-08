@@ -24,7 +24,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
 
 # --- Laufzeit ---------------------------------------------------------------
 # Keine RUN-Befehle in dieser Stufe: so baut buildx arm64 ohne QEMU-Emulation.
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM gcr.io/distroless/static-debian13:nonroot
 LABEL org.opencontainers.image.source="https://github.com/mrcdlm/dnsdeck" \
       org.opencontainers.image.description="Self-hosted dynamic DNS for Cloudflare with tunnel monitoring" \
       org.opencontainers.image.licenses="MIT"

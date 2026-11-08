@@ -81,11 +81,13 @@ func run() error {
 	if err := ensureWritable(cfg.DataDir); err != nil {
 		return err
 	}
-	st, err := store.Open(ctx, filepath.Join(cfg.DataDir, "app.db"))
+	dbPath := filepath.Join(cfg.DataDir, "app.db")
+	st, err := store.Open(ctx, dbPath)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
 	defer st.Close()
+	restrictDBFiles(dbPath, log)
 	// Deutsche Alttexte (vor 0.2.0) übersetzbar machen
 	if n, err := st.UpgradeLegacyMessages(ctx); err != nil {
 		log.Warn("Alte Meldungen konnten nicht umgewandelt werden", "err", err)
@@ -288,6 +290,19 @@ func tunnelEvent(c tunnels.Change) notify.Event {
 		TitleMsg:   i18n.M("notify.tunnel.title", "name", c.Name, "to", to),
 		MessageMsg: i18n.M("notify.tunnel.message", "from", from, "to", to),
 		Data:       map[string]string{"tunnel": c.Name, "tunnel_id": c.TunnelID, "from": c.From, "to": c.To},
+	}
+}
+
+// restrictDBFiles macht die Datenbank nur für den eigenen Benutzer lesbar.
+// SQLite legt sie mit 0644 an; im meist 0755 offenen Datenverzeichnis
+// könnte sonst jeder Benutzer des Hosts IP-Verlauf und Konfiguration lesen.
+// WAL- und SHM-Datei übernehmen die Rechte der Datenbank, sobald sie neu
+// entstehen; vorhandene werden mit angepasst.
+func restrictDBFiles(dbPath string, log *slog.Logger) {
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if err := os.Chmod(dbPath+suffix, 0o600); err != nil && !errors.Is(err, os.ErrNotExist) {
+			log.Warn("Dateirechte der Datenbank nicht einschränkbar", "file", dbPath+suffix, "err", err)
+		}
 	}
 }
 

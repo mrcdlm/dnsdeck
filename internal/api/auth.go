@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,13 @@ const (
 	maxFailures   = 10
 	failureWindow = time.Minute
 	failureDelay  = time.Second
+
+	// Höchstens so viele bcrypt-Prüfungen gleichzeitig: Jede kostet spürbar
+	// CPU. Ohne Grenze legt eine Flut von Anmeldeversuchen aus vielen
+	// Adressen (z. B. einem IPv6-Netz) den Host lahm.
+	maxConcurrentChecks = 2
+	// So lange wartet ein Versuch auf eine freie Prüfung, danach 429.
+	checkQueueTimeout = 5 * time.Second
 )
 
 type sessionStore interface {
@@ -45,6 +53,9 @@ type Auth struct {
 
 	mu       sync.Mutex
 	attempts map[string][]time.Time // Anmeldeversuche je Client im Zeitfenster
+
+	checks    chan struct{} // freie Plätze für gleichzeitige Passwortprüfungen
+	checkWait time.Duration // Wartezeit auf einen freien Platz
 }
 
 // NewAuth erwartet APP_PASSWORD. Ist der Wert bereits ein bcrypt-Hash, wird
@@ -54,7 +65,7 @@ type Auth struct {
 func NewAuth(password string, st sessionStore) (*Auth, error) {
 	key := sha256.Sum256([]byte("dnsdeck session key\x00" + password))
 	a := &Auth{store: st, now: time.Now, delay: failureDelay, attempts: map[string][]time.Time{},
-		sessionKey: key[:]}
+		sessionKey: key[:], checks: make(chan struct{}, maxConcurrentChecks), checkWait: checkQueueTimeout}
 	if strings.HasPrefix(password, "$2") {
 		if _, err := bcrypt.Cost([]byte(password)); err == nil {
 			a.hash = []byte(password)
@@ -74,6 +85,36 @@ func NewAuth(password string, st sessionStore) (*Auth, error) {
 
 func (a *Auth) checkPassword(pw string) bool {
 	return bcrypt.CompareHashAndPassword(a.hash, []byte(pw)) == nil
+}
+
+// acquireCheck wartet auf einen freien Platz für eine Passwortprüfung und
+// meldet false, wenn innerhalb von checkWait keiner frei wird oder
+// der Client aufgibt. Freigeben mit releaseCheck.
+func (a *Auth) acquireCheck(ctx context.Context) bool {
+	t := time.NewTimer(a.checkWait)
+	defer t.Stop()
+	select {
+	case a.checks <- struct{}{}:
+		return true
+	case <-t.C:
+		return false
+	case <-ctx.Done():
+		return false
+	}
+}
+
+func (a *Auth) releaseCheck() { <-a.checks }
+
+// limitKey fasst Adressen für die Login-Sperre zusammen: IPv6 je /64-Netz,
+// weil ein Anschluss meist ein ganzes /64 hat und ein Angreifer sonst
+// für jeden Versuch eine neue Adresse nehmen könnte. IPv4 bleibt einzeln.
+func limitKey(client string) string {
+	a, err := netip.ParseAddr(client)
+	if err != nil || !a.Is6() || a.Is4In6() {
+		return client
+	}
+	p, _ := a.WithZone("").Prefix(64)
+	return p.String()
 }
 
 // beginAttempt zählt einen Anmeldeversuch, bevor das Passwort geprüft wird,

@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Built with Go 1.27.3: fixes vulnerabilities in the Go standard library that affect dnsdeck
+  (HTTP/2 server and client, `net/http`, `net/textproto`, `crypto/tls`, `crypto/x509`).
+  Images up to and including 0.5.0 were built with Go 1.27.1 – please update.
+- Updated dependencies: `golang.org/x/net` 0.62.0, `golang.org/x/crypto` 0.58.0, chi 5.5.0,
+  `modernc.org/sqlite` 1.62.0; frontend build tools (Vite 8.3.6) without known vulnerabilities.
+- Login rate limit for IPv6 counts per /64 network: rotating addresses within one connection no
+  longer bypasses the limit.
+- At most two password checks run at the same time; a flood of login attempts from many
+  addresses can no longer tie up the CPU.
+- The database files (`app.db`, `-wal`, `-shm`) are readable by the container user only (`0600`).
+- Additional response headers: `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy`,
+  `Permissions-Policy`.
+
+### Changed
+- Runtime image based on `distroless/static-debian13` (was Debian 12).
+- Docker Compose: read-only root filesystem (`read_only: true`) with a small tmpfs for `/tmp`.
+  Existing installations can add both lines to their `docker-compose.yml`.
+
 ## [0.5.0] – 2026-10-06
 
 ### Added

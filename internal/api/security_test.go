@@ -2,11 +2,14 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/mrcdlm/dnsdeck/internal/store"
 )
@@ -119,5 +122,75 @@ func TestCrossOriginRequestsRejected(t *testing.T) {
 	}
 	if code := send("POST", "/api/webhooks", map[string]string{"Sec-Fetch-Site": "same-origin"}); code != http.StatusCreated {
 		t.Errorf("eigene Origin: %d", code)
+	}
+}
+
+func TestLimitKey(t *testing.T) {
+	for in, want := range map[string]string{
+		"198.51.100.7":          "198.51.100.7",
+		"2001:db8:1:2:aaaa::1":  "2001:db8:1:2::/64",
+		"2001:db8:1:2:ffff::99": "2001:db8:1:2::/64",
+		"fe80::1%eth0":          "fe80::/64",
+		"::ffff:198.51.100.7":   "::ffff:198.51.100.7",
+		"kein-ip":               "kein-ip",
+	} {
+		if got := limitKey(in); got != want {
+			t.Errorf("limitKey(%q) = %q, erwartet %q", in, got, want)
+		}
+	}
+}
+
+// Wer per IPv6 für jeden Versuch eine neue Adresse aus seinem /64 nimmt,
+// umgeht die Login-Sperre nicht; ein anderes Netz bleibt davon unberührt.
+func TestLoginRateLimitIPv6Subnet(t *testing.T) {
+	e := newTestEnv(t, nil)
+	e.api.trustedProxies = []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
+	login := func(ip, pw string) int {
+		r, _ := http.NewRequest("POST", e.srv.URL+"/api/login", strings.NewReader(`{"password":"`+pw+`"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("CF-Connecting-IP", ip)
+		resp, err := e.srv.Client().Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	for i := range maxFailures {
+		login(fmt.Sprintf("2001:db8:1:2::%x", i+1), "falsch")
+	}
+	if code := login("2001:db8:1:2:dead:beef::1", "richtig"); code != 429 {
+		t.Fatalf("neue Adresse im selben /64: %d statt 429", code)
+	}
+	if code := login("2001:db8:1:3::1", "richtig"); code != 200 {
+		t.Fatalf("anderes /64: %d statt 200", code)
+	}
+}
+
+// Sind alle Plätze für Passwortprüfungen belegt, wird ein weiterer Versuch
+// nach kurzer Wartezeit abgewiesen, statt zusätzlich CPU zu belegen.
+func TestLoginConcurrentChecksLimited(t *testing.T) {
+	e := newTestEnv(t, nil)
+	e.api.auth.checkWait = 50 * time.Millisecond
+	for range maxConcurrentChecks {
+		e.api.auth.checks <- struct{}{}
+	}
+	if code := e.do(t, "POST", "/api/login", `{"password":"richtig"}`, nil).StatusCode; code != 429 {
+		t.Fatalf("alle Plätze belegt: %d statt 429", code)
+	}
+	e.api.auth.releaseCheck()
+	if code := e.do(t, "POST", "/api/login", `{"password":"richtig"}`, nil).StatusCode; code != 200 {
+		t.Fatalf("Platz frei: %d statt 200", code)
+	}
+}
+
+func TestSecurityHeaders(t *testing.T) {
+	e := newTestEnv(t, nil)
+	resp := e.do(t, "GET", "/healthz", "", nil)
+	for _, h := range []string{"Content-Security-Policy", "X-Frame-Options", "X-Content-Type-Options",
+		"Cross-Origin-Opener-Policy", "Cross-Origin-Resource-Policy", "Permissions-Policy"} {
+		if resp.Header.Get(h) == "" {
+			t.Errorf("Header %s fehlt", h)
+		}
 	}
 }

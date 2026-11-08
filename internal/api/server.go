@@ -174,7 +174,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	client := s.clientIP(r)
-	if !s.auth.beginAttempt(client) {
+	key := limitKey(client)
+	if !s.auth.beginAttempt(key) {
 		writeMsg(w, r, http.StatusTooManyRequests, i18n.M("auth.too_many_attempts"))
 		return
 	}
@@ -188,7 +189,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.auth.checkPassword(body.Password) {
+	if !s.auth.acquireCheck(r.Context()) {
+		s.log.Warn("Login abgewiesen – zu viele gleichzeitige Anmeldeversuche", "client", client)
+		writeMsg(w, r, http.StatusTooManyRequests, i18n.M("auth.too_many_attempts"))
+		return
+	}
+	ok := s.auth.checkPassword(body.Password)
+	s.auth.releaseCheck()
+
+	if !ok {
 		s.log.Warn("Login fehlgeschlagen", "client", client)
 		select {
 		case <-time.After(s.auth.delay):
@@ -198,7 +207,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.auth.loginSucceeded(client)
+	s.auth.loginSucceeded(key)
 	token, exp, err := s.auth.newSession(r.Context())
 	if err != nil {
 		s.log.Error("Session anlegen fehlgeschlagen", "err", err)
@@ -298,6 +307,11 @@ func securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
+		// Fremde Seiten bekommen weder ein Fensterhandle (window.opener)
+		// noch dürfen sie Antworten einbetten (Spectre-artige Lecks).
+		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		h.Set("Cross-Origin-Resource-Policy", "same-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "+
 				"connect-src 'self'; manifest-src 'self'; worker-src 'self'; "+
